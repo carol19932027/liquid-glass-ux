@@ -239,12 +239,14 @@ start_provider() {
     [ -n "$url" ] && break
     if ! kill -0 "$PROVIDER_PID" 2>/dev/null; then
       say "${name} exited early — log tail:"; tail -n 20 "$log" 2>/dev/null
+      record_attempt "$name" "" 000 000 000 "process exited early: $(tail -n 3 "$log" 2>/dev/null | tr '\n' ' ' | cut -c1-200)"
       PROVIDER_PID=""; return 1
     fi
     sleep 1
   done
   if [ -z "$url" ]; then
     say "no ${name} URL after 40s — log tail:"; tail -n 20 "$log" 2>/dev/null
+    record_attempt "$name" "" 000 000 000 "no public URL after 40s: $(tail -n 3 "$log" 2>/dev/null | tr '\n' ' ' | cut -c1-200)"
     kill "$PROVIDER_PID" 2>/dev/null; PROVIDER_PID=""; return 1
   fi
   TUNNEL_URL="$url"; say "${name} URL: ${TUNNEL_URL}"
