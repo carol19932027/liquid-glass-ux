@@ -25,6 +25,9 @@ mkdir -p "$LOG_DIR"
 
 VITE_LOG="${LOG_DIR}/vite.log"
 ATTEMPTS_LOG="${LOG_DIR}/attempts.md"
+COMMENT_BODY_FILE="${LOG_DIR}/comment-body.md"
+COMMENT_ID=""
+SYNC_COUNT=0
 : > "$ATTEMPTS_LOG"
 VITE_PID=""
 PROVIDER_PID=""
@@ -180,8 +183,14 @@ $(collect_diagnostics "$TUNNEL_URL")
   fi
 
   if gh_available && [ -n "${GITHUB_SHA:-}" ]; then
-    gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$body" >/dev/null 2>&1 \
-      || say "could not post commit comment (needs contents: write)"
+    COMMENT_ID=$(gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+      -f body="$body" --jq '.id' 2>/dev/null || true)
+    if [ -n "${COMMENT_ID:-}" ]; then
+      printf '%s' "$body" > "$COMMENT_BODY_FILE"
+      say "published preview URL in commit comment ${COMMENT_ID}"
+    else
+      say "could not post commit comment (needs contents: write)"
+    fi
   fi
 
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
@@ -222,6 +231,17 @@ $(collect_diagnostics "$TUNNEL_URL")
       fi
     fi
   fi
+}
+
+# Keeps the published commit comment current, so the live sync state is observable
+# without access to the runner logs.
+publish_preview_status() { # status text
+  [ -n "$COMMENT_ID" ] || return 0
+  gh_available || return 0
+  local current="${LOG_DIR}/comment-current.md"
+  { cat "$COMMENT_BODY_FILE" 2>/dev/null; echo; echo "- **live sync:** $1"; } > "$current"
+  gh api -X PATCH "repos/${GITHUB_REPOSITORY}/comments/${COMMENT_ID}" \
+    -F body=@"$current" >/dev/null 2>&1 || say "could not update commit comment ${COMMENT_ID}"
 }
 
 publish_failure() {
@@ -362,7 +382,9 @@ sync_loop() {
           npm ci --no-audit --no-fund || say "npm ci failed"
         fi
         current_sha="$remote_sha"
+        SYNC_COUNT=$((SYNC_COUNT + 1))
         say "workspace synced; Vite HMR pushed to connected browsers"
+        publish_preview_status "update ${SYNC_COUNT} — runner at \`${current_sha:0:7}\`, $(date -u +%H:%M:%S) UTC"
       fi
     fi
     sleep 5
