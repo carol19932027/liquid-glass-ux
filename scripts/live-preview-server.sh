@@ -103,6 +103,8 @@ verify_tunnel() { # url attempts require_ws
       WS_CODE=$(ws_probe "$url")
       if [ "$require_ws" != "1" ] || [ "$WS_CODE" = "101" ]; then
         say "Tunnel healthy after ${i} attempt(s) — / 200, /@vite/client 200, WS upgrade ${WS_CODE}"
+        record_attempt "$PROVIDER_NAME" "$url" "$HTTP_CODE" "$CLIENT_CODE" "$WS_CODE" \
+          "healthy after ${i} attempt(s), require_ws=${require_ws}"
         return 0
       fi
       say "  HTTP ok but WebSocket upgrade returned ${WS_CODE} (101 required for HMR); retrying…"
@@ -111,6 +113,8 @@ verify_tunnel() { # url attempts require_ws
     fi
     sleep 5
   done
+  record_attempt "$PROVIDER_NAME" "$url" "$HTTP_CODE" "$CLIENT_CODE" "$WS_CODE" \
+    "unhealthy after ${attempts} attempts (require_ws=${require_ws})"
   return 1
 }
 
