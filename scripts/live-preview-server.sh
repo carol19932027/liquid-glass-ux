@@ -105,23 +105,29 @@ verify_tunnel() { # url attempts require_ws
   return 1
 }
 
-collect_diagnostics() { # url logfile -> stdout
-  local url="$1" logfile="$2" host
+collect_diagnostics() { # url -> stdout
+  local url="$1" host f
   host=$(printf '%s' "$url" | sed -E 's#https?://([^/]+).*#\1#')
-  echo "### URL"
-  echo "${url}"
+  echo "### Last URL obtained"
+  echo "${url:-<none>}"
   echo
-  echo "### DNS resolution (${host})"
-  (getent hosts "$host" 2>&1 || true) | head -5
-  echo
-  echo "### curl -v (first 25 lines)"
-  (curl -sv --max-time 15 "${url}/" 2>&1 || true) | head -25
-  echo
-  echo "### tunnel provider log (${logfile}, last 30 lines)"
-  (tail -n 30 "$logfile" 2>/dev/null || echo "(no log)")
-  echo
-  echo "### vite log (last 15 lines)"
-  (tail -n 15 "$VITE_LOG" 2>/dev/null || echo "(no log)")
+  if [ -n "${url:-}" ]; then
+    echo "### DNS resolution (${host})"
+    (getent hosts "$host" 2>&1 || true) | head -6
+    echo
+    echo "### curl -v (first 20 lines)"
+    (curl -sv --max-time 15 "${url}/" 2>&1 || true) | head -20
+    echo
+  fi
+  for f in "$LOG_DIR"/*.log; do
+    [ -e "$f" ] || continue
+    case "$f" in *vite.log) continue ;; esac
+    echo "### provider log: $(basename "$f") (last 20 lines)"
+    (tail -n 20 "$f" 2>/dev/null | tr -d '\000' || echo "(empty)")
+    echo
+  done
+  echo "### vite log (last 12 lines)"
+  (tail -n 12 "$VITE_LOG" 2>/dev/null || echo "(no log)")
 }
 
 # --------------------------------------------------------------------------
