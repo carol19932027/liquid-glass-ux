@@ -103,6 +103,7 @@ jobs:
           WS_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
             -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
             -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+            -H 'Sec-WebSocket-Protocol: vite-hmr' \
             "${TUNNEL_URL}/" || echo "000")
 
           echo "Tunnel check: / -> ${HTTP_CODE}, /@vite/client -> ${CLIENT_CODE}, WS upgrade -> ${WS_CODE}"
