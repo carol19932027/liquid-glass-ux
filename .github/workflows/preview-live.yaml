@@ -134,6 +134,7 @@ jobs:
             echo "- **Synced Branch:** \`${SYNC_BRANCH}\`"
             echo "- **Active Duration:** ${PREVIEW_MINUTES} minutes"
             echo "- **Hot Module Replacement:** Enabled over WSS (\`clientPort: 443\`)"
+            echo "- **Tunnel verified:** \`/\` → ${HTTP_CODE}, \`/@vite/client\` → ${CLIENT_CODE}, WS upgrade → ${WS_CODE}"
             echo ""
             echo "Pushing new commits to \`${SYNC_BRANCH}\` while this job is active automatically syncs the runner workspace and triggers Vite HMR in connected browsers."
           } >> "$GITHUB_STEP_SUMMARY"
