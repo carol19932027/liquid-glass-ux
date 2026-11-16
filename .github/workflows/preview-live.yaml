@@ -96,12 +96,31 @@ jobs:
             exit 1
           fi
 
-          echo "::notice title=Vite Live Preview (HMR)::${TUNNEL_URL}"
+          # 3. Verify the tunnel end-to-end before advertising it:
+          #    HTML shell + Vite HMR client script + WebSocket upgrade handshake.
+          HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${TUNNEL_URL}/" || echo "000")
+          CLIENT_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${TUNNEL_URL}/@vite/client" || echo "000")
+          WS_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+            -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+            -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+            "${TUNNEL_URL}/" || echo "000")
+
+          echo "Tunnel check: / -> ${HTTP_CODE}, /@vite/client -> ${CLIENT_CODE}, WS upgrade -> ${WS_CODE}"
+          if [ "$HTTP_CODE" != "200" ] || [ "$CLIENT_CODE" != "200" ]; then
+            echo "::error::Tunnel reachable but unhealthy (/=${HTTP_CODE}, /@vite/client=${CLIENT_CODE}); see /tmp/cloudflared.log"
+            tail -n 40 /tmp/cloudflared.log || true
+            exit 1
+          fi
+          if [ "$WS_CODE" != "101" ]; then
+            echo "::warning::WebSocket upgrade returned ${WS_CODE} instead of 101 — HMR may fall back to polling"
+          fi
+
+          echo "::notice title=Vite Live Preview (HMR)::${TUNNEL_URL} (verified: / ${HTTP_CODE}, /@vite/client ${CLIENT_CODE}, WS ${WS_CODE})"
 
           # Publish the URL *while the job is still running* so it is discoverable
           # immediately (step summaries and annotations only appear after completion):
           # a commit comment on HEAD, plus a PR comment when an open PR exists.
-          COMMIT_COMMENT_BODY="**Vite HMR live preview:** ${TUNNEL_URL} (branch \`${SYNC_BRANCH}\`, active for ${PREVIEW_MINUTES} minutes) — run ${GITHUB_RUN_ID}"
+          COMMIT_COMMENT_BODY="**Vite HMR live preview:** ${TUNNEL_URL} (branch \`${SYNC_BRANCH}\`, active for ${PREVIEW_MINUTES} minutes) — verified \`/\` ${HTTP_CODE}, \`/@vite/client\` ${CLIENT_CODE}, WS upgrade ${WS_CODE} — run ${GITHUB_RUN_ID}"
           gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
             -f body="$COMMIT_COMMENT_BODY" > /dev/null 2>&1 || \
             echo "::warning::Could not post commit comment with the preview URL (check contents: write permission)"
