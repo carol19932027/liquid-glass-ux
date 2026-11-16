@@ -161,7 +161,7 @@ jobs:
             fi
           fi
 
-          # 3. Continuous workspace sync loop: polls remote branch and applies updates in-place for HMR
+          # 4. Continuous workspace sync loop: polls remote branch and applies updates in-place for HMR
           END_TIME=$(( $(date +%s) + PREVIEW_MINUTES * 60 ))
           CURRENT_SHA=$(git rev-parse HEAD)
           echo "Live preview running at ${TUNNEL_URL} (tracking origin/${SYNC_BRANCH} @ ${CURRENT_SHA})"
