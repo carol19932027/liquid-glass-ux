@@ -598,3 +598,5 @@ pre .k {
     justify-content: center;
   }
 }
+
+/* hmr-sync-probe: temporary marker to verify the CI live-preview sync loop */
