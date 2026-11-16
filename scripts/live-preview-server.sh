@@ -312,8 +312,10 @@ try_localhostrun() { # require_ws
   local require_ws="${1:-1}"
   command -v ssh >/dev/null 2>&1 || { say "ssh not available — skipping localhost.run"; return 1; }
   # nokey@ is localhost.run's anonymous user; any other user gets "Permission denied (publickey)"
+  # only the issued *.lhr.life host is a tunnel URL; the banner also mentions
+  # admin.localhost.run, which must not be matched.
   start_provider "localhost.run" "${LOG_DIR}/localhostrun.log" \
-    'https://[a-zA-Z0-9.-]+\.(lhr\.life|localhost\.run)' \
+    'https://[a-zA-Z0-9-]+\.lhr\.life' \
     ssh -R 80:localhost:${PORT} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -o ServerAliveInterval=30 -o LogLevel=INFO nokey@localhost.run || return 1
   if verify_tunnel "$TUNNEL_URL" 8 "$require_ws"; then return 0; fi
