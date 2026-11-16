@@ -24,6 +24,8 @@ LOG_DIR="${LOG_DIR:-/tmp/live-preview}"
 mkdir -p "$LOG_DIR"
 
 VITE_LOG="${LOG_DIR}/vite.log"
+ATTEMPTS_LOG="${LOG_DIR}/attempts.md"
+: > "$ATTEMPTS_LOG"
 VITE_PID=""
 PROVIDER_PID=""
 PROVIDER_NAME=""
