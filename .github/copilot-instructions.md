@@ -25,7 +25,23 @@ text is in [`AGENTS.md`](../AGENTS.md); per-topic copies live in `.claude/rules/
   `src/glass/**` unless a commit carries a `Glass-Approved-By:` trailer or the PR has the
   `glass-approved` label.
 
-## 3. Preview & sync
+## 3. No new frameworks without permission
+
+- Never add a new framework or runtime (front-end or back-end) without asking the user
+  first and receiving **explicit permission in chat**.
+- Approved libraries: **Vite**, **Hono**, **Wrangler** (+ baseline TypeScript). The
+  machine-readable allowlist is `scripts/framework-allowlist.txt` — never edit it just to
+  make a check pass.
+- Covers new direct `package.json` dependencies, new framework config files
+  (`next.config.*`, `nuxt.config.*`, `astro.config.*`, `angular.json`, Express/Fastify/
+  NestJS/Koa, …), and switching build tools or server runtimes. Transitive dependencies of
+  an approved library are fine.
+- CI enforces it: `scripts/guard-frameworks.sh` (job `guard-frameworks`) fails pushes/PRs
+  that add a non-allowlisted dependency unless a commit carries a
+  `Framework-Approved-By:` trailer or the PR has the `framework-approved` label.
+- Local check: `npm run guard:frameworks`.
+
+## 4. Preview & sync
 
 - Keep the Vite dev server on `0.0.0.0:5173` (`npm run dev`) and the workspace↔CI sync
   watcher (`npm run sync:ci`) running unless the user asks to stop them.

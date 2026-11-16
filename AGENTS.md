@@ -27,7 +27,25 @@ Read this file at the start of each turn and comply before doing anything else.
   fails any push or pull request that touches `src/glass/**` unless the commit carries a
   `Glass-Approved-By:` trailer or the PR has the `glass-approved` label.
 
-## 3. Preview & sync
+## 3. No new frameworks without permission
+
+- **Never** add a new framework or runtime — front-end **or** back-end — without first
+  asking the user and receiving **explicit permission in chat**.
+- Currently approved libraries: **Vite**, **Hono**, **Wrangler** (plus the existing
+  baseline toolchain: TypeScript). The machine-readable list is
+  [`scripts/framework-allowlist.txt`](./scripts/framework-allowlist.txt).
+- This covers: new **direct** dependencies in `package.json`, new framework config files
+  (`next.config.*`, `nuxt.config.*`, `svelte.config.*`, `astro.config.*`,
+  `remix.config.*`, `angular.json`, …), and switching build tools or server runtimes.
+- Transitive dependencies of an approved library are fine; a new direct dependency that
+  is not on the allowlist is not.
+- Enforcement is automated: `scripts/guard-frameworks.sh` runs in CI (job
+  `guard-frameworks`) and fails any push or PR that adds a non-allowlisted direct
+  dependency or framework config file, unless the commit carries a
+  `Framework-Approved-By:` trailer or the PR has the `framework-approved` label.
+- Local check: `npm run guard:frameworks`.
+
+## 4. Preview & sync
 
 - Keep the Vite dev server on `0.0.0.0:5173` (`npm run dev`) and the workspace↔CI sync
   watcher (`npm run sync:ci`) running unless the user asks to stop them.

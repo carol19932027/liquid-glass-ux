@@ -1,0 +1,15 @@
+# Approved direct dependencies (frameworks, runtimes and their toolchain).
+# Adding anything else to package.json requires explicit user permission first.
+# See AGENTS.md → rule 4 "No new frameworks without permission".
+#
+# One npm package name per line. '#' starts a comment.
+# Enforced in CI by scripts/guard-frameworks.sh (job: guard-frameworks).
+
+# --- build tooling already in the repository (baseline) ---
+vite
+typescript
+
+# --- explicitly approved by the user ---
+hono
+wrangler
+@cloudflare/workers-types

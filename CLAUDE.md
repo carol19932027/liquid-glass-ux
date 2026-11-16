@@ -21,7 +21,21 @@ in force until the user explicitly revokes or amends them. The full text lives i
   touch `src/glass/**` fail unless the commit has a `Glass-Approved-By:` trailer or the
   PR carries the `glass-approved` label.
 
-## 3. Preview & sync
+## 3. No new frameworks without permission
+
+- Never add a new framework or runtime (front-end or back-end) without asking the user
+  first and receiving **explicit permission in chat**.
+- Approved libraries: **Vite**, **Hono**, **Wrangler** (+ baseline TypeScript). The
+  machine-readable allowlist is `scripts/framework-allowlist.txt`.
+- Covers new direct `package.json` dependencies, new framework config files
+  (`next.config.*`, `nuxt.config.*`, `astro.config.*`, `angular.json`, …), and switching
+  build tools or server runtimes. Transitive deps of an approved library are fine.
+- CI enforces it: `scripts/guard-frameworks.sh` (job `guard-frameworks`) fails pushes/PRs
+  that add a non-allowlisted dependency unless a commit carries a
+  `Framework-Approved-By:` trailer or the PR has the `framework-approved` label.
+- Local check: `npm run guard:frameworks`.
+
+## 4. Preview & sync
 
 - Keep the Vite dev server (`0.0.0.0:5173`) and the `npm run sync:ci` watcher running
   unless the user asks to stop them.
