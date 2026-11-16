@@ -191,9 +191,9 @@ publish_success() {
   fi
 }
 
-publish_failure() { # logfile
-  local logfile="$1" diag
-  diag=$(collect_diagnostics "${TUNNEL_URL:-<no url obtained>}" "$logfile")
+publish_failure() {
+  local diag
+  diag=$(collect_diagnostics "${TUNNEL_URL:-}")
   echo "::error::No tunnel provider became healthy — see the diagnostics comment on this commit"
   printf '%s\n' "$diag"
   if gh_available && [ -n "${GITHUB_SHA:-}" ]; then
@@ -246,9 +246,12 @@ try_cloudflared() { # require_ws
   # so it is only used when HMR over WSS is not required.
   [ "$require_ws" = "1" ] || protocol="http2"
   command -v cloudflared >/dev/null 2>&1 || { say "cloudflared not installed — skipping"; return 1; }
-  start_provider "cloudflared" "${LOG_DIR}/cloudflared-${protocol}.log" \
+  # --edge-ip-version 4: runners often lack IPv6 egress, and quic silently stalls
+  # when it tries an IPv6 edge address (the URL is printed but never reachable).
+  start_provider "cloudflared-${protocol}" "${LOG_DIR}/cloudflared-${protocol}.log" \
     'https://[a-zA-Z0-9-]+\.trycloudflare\.com' \
-    cloudflared tunnel --no-autoupdate --protocol "$protocol" --url "http://127.0.0.1:${PORT}" || return 1
+    cloudflared tunnel --no-autoupdate --protocol "$protocol" --edge-ip-version 4 \
+      --url "http://127.0.0.1:${PORT}" || return 1
   if verify_tunnel "$TUNNEL_URL" 8 "$require_ws"; then return 0; fi
   drop_provider; return 1
 }
