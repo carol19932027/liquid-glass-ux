@@ -101,22 +101,11 @@ jobs:
 
           # Publish the URL *while the job is still running* so it is discoverable
           # immediately (step summaries and annotations only appear after completion):
-          # a GitHub deployment with environment_url + a commit comment on HEAD.
-          if gh api -X POST "repos/${GITHUB_REPOSITORY}/deployments" \
-              -f ref="${GITHUB_SHA}" -f environment="vite-hmr-preview" \
-              -f description="Vite HMR live preview for ${SYNC_BRANCH}" \
-              -F transient_environment=true -F auto_merge=false \
-              --jq '.id' > /tmp/deployment_id 2>/dev/null && [ -s /tmp/deployment_id ]; then
-            DEPLOYMENT_ID=$(cat /tmp/deployment_id)
-            gh api -X POST "repos/${GITHUB_REPOSITORY}/deployments/${DEPLOYMENT_ID}/statuses" \
-              -f state="success" -f environment_url="${TUNNEL_URL}" \
-              -f description="Live Vite HMR preview (${PREVIEW_MINUTES}m)" > /dev/null 2>&1 || true
-            echo "Deployment ${DEPLOYMENT_ID} published: ${TUNNEL_URL}"
-          fi
-
+          # a commit comment on HEAD, plus a PR comment when an open PR exists.
           COMMIT_COMMENT_BODY="**Vite HMR live preview:** ${TUNNEL_URL} (branch \`${SYNC_BRANCH}\`, active for ${PREVIEW_MINUTES} minutes) — run ${GITHUB_RUN_ID}"
           gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
-            -f body="$COMMIT_COMMENT_BODY" > /dev/null 2>&1 || true
+            -f body="$COMMIT_COMMENT_BODY" > /dev/null 2>&1 || \
+            echo "::warning::Could not post commit comment with the preview URL (check contents: write permission)"
 
           # Write GitHub Actions Job Summary
           {
