@@ -35,7 +35,16 @@ in force until the user explicitly revokes or amends them. The full text lives i
   `Framework-Approved-By:` trailer or the PR has the `framework-approved` label.
 - Local check: `npm run guard:frameworks`.
 
-## 4. Preview & sync
+## 4. Live server: Cloudflare Workers via Wrangler (`workers.dev`)
 
-- Keep the Vite dev server (`0.0.0.0:5173`) and the `npm run sync:ci` watcher running
-  unless the user asks to stop them.
+- Dev/live server is **Wrangler**: `wrangler dev` locally, `wrangler deploy` for the live
+  `https://<worker>.<account-subdomain>.workers.dev` URL.
+- **Vite stays only as the build tool** (`vite build` → `dist/`, served by the Worker's
+  `assets` config). `npm run dev` is no longer the preview mechanism.
+- Domain: default **`workers.dev`** subdomain only — do not add `routes`/`custom_domains`
+  without asking.
+- Credentials only from Actions secrets `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`;
+  never hardcode, log, or print them.
+- Keep the `npm run sync:ci` watcher running unless asked to stop it.
+- Transitional: `.github/workflows/preview-live.yaml` (Vite behind a tunnel) is retired
+  once the Worker deploy path is verified.

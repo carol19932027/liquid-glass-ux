@@ -45,7 +45,18 @@ Read this file at the start of each turn and comply before doing anything else.
   `Framework-Approved-By:` trailer or the PR has the `framework-approved` label.
 - Local check: `npm run guard:frameworks`.
 
-## 4. Preview & sync
+## 4. Live server: Cloudflare Workers via Wrangler (`workers.dev`)
 
-- Keep the Vite dev server on `0.0.0.0:5173` (`npm run dev`) and the workspace↔CI sync
-  watcher (`npm run sync:ci`) running unless the user asks to stop them.
+- The dev/live server is **Wrangler**, not the Vite dev server:
+  - local: `wrangler dev` (serves the Worker plus the built assets)
+  - live: `wrangler deploy` → `https://<worker>.<account-subdomain>.workers.dev`
+- **Vite remains only as the build tool**: `vite build` → `dist/`, which the Worker serves
+  through its `assets` configuration. Do not use `npm run dev` as the preview mechanism.
+- Domain: the default Cloudflare **`workers.dev`** subdomain. No custom domain or zone is
+  configured, so do not add `routes` / `custom_domains` without asking first.
+- Credentials come only from GitHub Actions secrets `CLOUDFLARE_API_TOKEN` and
+  `CLOUDFLARE_ACCOUNT_ID`. Never hardcode, log, or print them.
+- Keep the workspace↔CI sync watcher (`npm run sync:ci`) running unless the user asks to
+  stop it.
+- Transitional: `.github/workflows/preview-live.yaml` (Vite dev server behind a tunnel)
+  exists only until the Worker deploy path is verified end-to-end, then it gets retired.
