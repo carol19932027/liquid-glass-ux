@@ -27,6 +27,7 @@ VITE_LOG="${LOG_DIR}/vite.log"
 VITE_PID=""
 PROVIDER_PID=""
 PROVIDER_NAME=""
+LAST_LOG=""
 TUNNEL_URL=""
 HTTP_CODE="000"
 CLIENT_CODE="000"
@@ -72,22 +73,33 @@ wait_local_vite() {
 # --------------------------------------------------------------------------
 probe() { curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$@" 2>/dev/null || true; }
 
-verify_tunnel() { # url attempts
-  local url="$1" attempts="${2:-8}" i
+# Vite's HMR socket: same origin, root path, subprotocol "vite-hmr".
+# A tunnel that cannot proxy the upgrade answers 200 (the HTML shell) instead of 101.
+ws_probe() {
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+    -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+    -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+    -H 'Sec-WebSocket-Protocol: vite-hmr' "$1/" 2>/dev/null || true)
+  printf '%s' "${code:-000}"
+}
+
+verify_tunnel() { # url attempts require_ws
+  local url="$1" attempts="${2:-8}" require_ws="${3:-1}" i
   HTTP_CODE="000"; CLIENT_CODE="000"; WS_CODE="000"
   for i in $(seq 1 "$attempts"); do
     HTTP_CODE=$(probe "${url}/"); HTTP_CODE="${HTTP_CODE:-000}"
     CLIENT_CODE=$(probe "${url}/@vite/client"); CLIENT_CODE="${CLIENT_CODE:-000}"
     if [ "$HTTP_CODE" = "200" ] && [ "$CLIENT_CODE" = "200" ]; then
-      WS_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
-        -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
-        -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
-        -H 'Sec-WebSocket-Protocol: vite-hmr' "${url}/" 2>/dev/null || true)
-      WS_CODE="${WS_CODE:-000}"
-      say "Tunnel healthy after ${i} attempt(s) — / 200, /@vite/client 200, WS upgrade ${WS_CODE}"
-      return 0
+      WS_CODE=$(ws_probe "$url")
+      if [ "$require_ws" != "1" ] || [ "$WS_CODE" = "101" ]; then
+        say "Tunnel healthy after ${i} attempt(s) — / 200, /@vite/client 200, WS upgrade ${WS_CODE}"
+        return 0
+      fi
+      say "  HTTP ok but WebSocket upgrade returned ${WS_CODE} (101 required for HMR); retrying…"
+    else
+      say "  not ready (attempt ${i}/${attempts}): / -> ${HTTP_CODE}, /@vite/client -> ${CLIENT_CODE}"
     fi
-    say "  not ready (attempt ${i}/${attempts}): / -> ${HTTP_CODE}, /@vite/client -> ${CLIENT_CODE}"
     sleep 5
   done
   return 1
@@ -193,68 +205,67 @@ ${diag}
 # --------------------------------------------------------------------------
 url_from_log() { grep -Eo "$2" "$1" 2>/dev/null | head -n 1 || true; }
 
-try_cloudflared() {
-  local log="${LOG_DIR}/cloudflared.log"
+# start_provider <name> <logfile> <url-regex> <command...>
+# Starts the tunnel, waits up to 40s for a public URL, verifies it, and leaves
+# PROVIDER_PID / PROVIDER_NAME / TUNNEL_URL set on success.
+start_provider() {
+  local name="$1" log="$2" regex="$3"; shift 3
+  local i url=""
+  LAST_LOG="$log"
+  say "starting ${name} tunnel…"
+  nohup "$@" > "$log" 2>&1 &
+  PROVIDER_PID=$!; PROVIDER_NAME="$name"
+  for i in $(seq 1 40); do
+    url=$(url_from_log "$log" "$regex")
+    [ -n "$url" ] && break
+    if ! kill -0 "$PROVIDER_PID" 2>/dev/null; then
+      say "${name} exited early — log tail:"; tail -n 20 "$log" 2>/dev/null
+      PROVIDER_PID=""; return 1
+    fi
+    sleep 1
+  done
+  if [ -z "$url" ]; then
+    say "no ${name} URL after 40s — log tail:"; tail -n 20 "$log" 2>/dev/null
+    kill "$PROVIDER_PID" 2>/dev/null; PROVIDER_PID=""; return 1
+  fi
+  TUNNEL_URL="$url"; say "${name} URL: ${TUNNEL_URL}"
+  return 0
+}
+
+drop_provider() { [ -n "$PROVIDER_PID" ] && kill "$PROVIDER_PID" 2>/dev/null; PROVIDER_PID=""; }
+
+try_cloudflared() { # require_ws
+  local require_ws="${1:-1}" protocol="quic"
+  # quic (cloudflared default) proxies WebSocket upgrades; http2 does not reliably,
+  # so it is only used when HMR over WSS is not required.
+  [ "$require_ws" = "1" ] || protocol="http2"
   command -v cloudflared >/dev/null 2>&1 || { say "cloudflared not installed — skipping"; return 1; }
-  say "starting cloudflared quick tunnel (http2)…"
-  nohup cloudflared tunnel --no-autoupdate --protocol http2 --url "http://127.0.0.1:${PORT}" > "$log" 2>&1 &
-  PROVIDER_PID=$!; PROVIDER_NAME="cloudflared"
-  local i url=""
-  for i in $(seq 1 40); do
-    url=$(url_from_log "$log" 'https://[a-zA-Z0-9-]+\.trycloudflare\.com')
-    [ -n "$url" ] && break
-    kill -0 "$PROVIDER_PID" 2>/dev/null || { say "cloudflared exited early"; tail -n 20 "$log"; return 1; }
-    sleep 1
-  done
-  [ -n "$url" ] || { say "no cloudflared URL after 40s"; tail -n 20 "$log"; return 1; }
-  TUNNEL_URL="$url"; say "cloudflared URL: ${TUNNEL_URL}"
-  verify_tunnel "$TUNNEL_URL" 8 && return 0
-  kill "$PROVIDER_PID" 2>/dev/null; PROVIDER_PID=""
-  return 1
+  start_provider "cloudflared" "${LOG_DIR}/cloudflared-${protocol}.log" \
+    'https://[a-zA-Z0-9-]+\.trycloudflare\.com' \
+    cloudflared tunnel --no-autoupdate --protocol "$protocol" --url "http://127.0.0.1:${PORT}" || return 1
+  if verify_tunnel "$TUNNEL_URL" 8 "$require_ws"; then return 0; fi
+  drop_provider; return 1
 }
 
-try_pinggy() {
-  local log="${LOG_DIR}/pinggy.log"
+try_pinggy() { # require_ws
+  local require_ws="${1:-1}"
   command -v ssh >/dev/null 2>&1 || { say "ssh not available — skipping pinggy"; return 1; }
-  say "starting pinggy tunnel…"
-  nohup ssh -p 443 -R0:localhost:${PORT} \
-    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -o ServerAliveInterval=30 -o LogLevel=ERROR a.pinggy.io > "$log" 2>&1 &
-  PROVIDER_PID=$!; PROVIDER_NAME="pinggy"
-  local i url=""
-  for i in $(seq 1 40); do
-    url=$(url_from_log "$log" 'https://[a-zA-Z0-9-]+\.a\.pinggy\.io')
-    [ -n "$url" ] && break
-    kill -0 "$PROVIDER_PID" 2>/dev/null || { say "pinggy ssh exited early"; tail -n 20 "$log"; return 1; }
-    sleep 1
-  done
-  [ -n "$url" ] || { say "no pinggy URL after 40s"; tail -n 20 "$log"; return 1; }
-  TUNNEL_URL="$url"; say "pinggy URL: ${TUNNEL_URL}"
-  verify_tunnel "$TUNNEL_URL" 8 && return 0
-  kill "$PROVIDER_PID" 2>/dev/null; PROVIDER_PID=""
-  return 1
+  start_provider "pinggy" "${LOG_DIR}/pinggy.log" 'https://[a-zA-Z0-9-]+\.a\.pinggy\.io' \
+    ssh -p 443 -R0:localhost:${PORT} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -o ServerAliveInterval=30 -o LogLevel=ERROR a.pinggy.io || return 1
+  if verify_tunnel "$TUNNEL_URL" 8 "$require_ws"; then return 0; fi
+  drop_provider; return 1
 }
 
-try_localhostrun() {
-  local log="${LOG_DIR}/localhostrun.log"
+try_localhostrun() { # require_ws
+  local require_ws="${1:-1}"
   command -v ssh >/dev/null 2>&1 || { say "ssh not available — skipping localhost.run"; return 1; }
-  say "starting localhost.run tunnel…"
-  nohup ssh -R 80:localhost:${PORT} \
-    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -o ServerAliveInterval=30 -o LogLevel=ERROR localhost.run > "$log" 2>&1 &
-  PROVIDER_PID=$!; PROVIDER_NAME="localhost.run"
-  local i url=""
-  for i in $(seq 1 40); do
-    url=$(url_from_log "$log" 'https://[a-zA-Z0-9.-]+\.(lhr\.life|localhost\.run)')
-    [ -n "$url" ] && break
-    kill -0 "$PROVIDER_PID" 2>/dev/null || { say "localhost.run ssh exited early"; tail -n 20 "$log"; return 1; }
-    sleep 1
-  done
-  [ -n "$url" ] || { say "no localhost.run URL after 40s"; tail -n 20 "$log"; return 1; }
-  TUNNEL_URL="$url"; say "localhost.run URL: ${TUNNEL_URL}"
-  verify_tunnel "$TUNNEL_URL" 8 && return 0
-  kill "$PROVIDER_PID" 2>/dev/null; PROVIDER_PID=""
-  return 1
+  start_provider "localhost.run" "${LOG_DIR}/localhostrun.log" \
+    'https://[a-zA-Z0-9.-]+\.(lhr\.life|localhost\.run)' \
+    ssh -R 80:localhost:${PORT} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -o ServerAliveInterval=30 -o LogLevel=ERROR localhost.run || return 1
+  if verify_tunnel "$TUNNEL_URL" 8 "$require_ws"; then return 0; fi
+  drop_provider; return 1
 }
 
 # --------------------------------------------------------------------------
@@ -301,18 +312,30 @@ main() {
   start_vite
   if ! wait_local_vite; then
     echo "::error::Vite dev server never answered on 127.0.0.1:${PORT}"
-    publish_failure "$VITE_LOG"
+    publish_failure "${LAST_LOG:-$VITE_LOG}"
     exit 1
   fi
 
-  local last_log="${LOG_DIR}/cloudflared.log"
-  if try_cloudflared; then publish_success; sync_loop; exit 0; fi
-  last_log="${LOG_DIR}/pinggy.log"
-  if try_pinggy; then publish_success; sync_loop; exit 0; fi
-  last_log="${LOG_DIR}/localhostrun.log"
-  if try_localhostrun; then publish_success; sync_loop; exit 0; fi
+  local providers=(try_cloudflared try_pinggy try_localhostrun) require_ws provider
+  # Pass 1: require a working WebSocket upgrade (101) — that is what makes HMR live.
+  # Pass 2: accept HTTP-only so the preview still exists if no tunnel can proxy WSS.
+  for require_ws in 1 0; do
+    if [ "$require_ws" = "1" ]; then
+      say "pass 1 — looking for a tunnel that proxies WebSocket (HMR) upgrades"
+    else
+      say "pass 2 — no WebSocket-capable tunnel found; falling back to HTTP-only preview"
+    fi
+    for provider in "${providers[@]}"; do
+      if "$provider" "$require_ws"; then
+        [ "$require_ws" = "1" ] || echo "::warning::Tunnel proxies HTTP but not WebSocket (WS ${WS_CODE}); HMR may not update live"
+        publish_success
+        sync_loop
+        exit 0
+      fi
+    done
+  done
 
-  publish_failure "$last_log"
+  publish_failure "${LAST_LOG:-$VITE_LOG}"
   exit 1
 }
 
