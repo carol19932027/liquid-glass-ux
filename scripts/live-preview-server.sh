@@ -332,7 +332,7 @@ main() {
   start_vite
   if ! wait_local_vite; then
     echo "::error::Vite dev server never answered on 127.0.0.1:${PORT}"
-    publish_failure "${LAST_LOG:-$VITE_LOG}"
+    publish_failure
     exit 1
   fi
 
@@ -355,7 +355,7 @@ main() {
     done
   done
 
-  publish_failure "${LAST_LOG:-$VITE_LOG}"
+  publish_failure
   exit 1
 }
 
