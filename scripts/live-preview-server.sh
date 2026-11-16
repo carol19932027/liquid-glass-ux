@@ -261,7 +261,7 @@ try_pinggy() { # require_ws
   command -v ssh >/dev/null 2>&1 || { say "ssh not available — skipping pinggy"; return 1; }
   start_provider "pinggy" "${LOG_DIR}/pinggy.log" 'https://[a-zA-Z0-9-]+\.a\.pinggy\.io' \
     ssh -p 443 -R0:localhost:${PORT} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -o ServerAliveInterval=30 -o LogLevel=ERROR a.pinggy.io || return 1
+        -o ServerAliveInterval=30 -o LogLevel=INFO a.pinggy.io || return 1
   if verify_tunnel "$TUNNEL_URL" 8 "$require_ws"; then return 0; fi
   drop_provider; return 1
 }
@@ -269,10 +269,21 @@ try_pinggy() { # require_ws
 try_localhostrun() { # require_ws
   local require_ws="${1:-1}"
   command -v ssh >/dev/null 2>&1 || { say "ssh not available — skipping localhost.run"; return 1; }
+  # nokey@ is localhost.run's anonymous user; any other user gets "Permission denied (publickey)"
   start_provider "localhost.run" "${LOG_DIR}/localhostrun.log" \
     'https://[a-zA-Z0-9.-]+\.(lhr\.life|localhost\.run)' \
     ssh -R 80:localhost:${PORT} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -o ServerAliveInterval=30 -o LogLevel=ERROR localhost.run || return 1
+        -o ServerAliveInterval=30 -o LogLevel=INFO nokey@localhost.run || return 1
+  if verify_tunnel "$TUNNEL_URL" 8 "$require_ws"; then return 0; fi
+  drop_provider; return 1
+}
+
+try_tunnelmole() { # require_ws
+  local require_ws="${1:-1}"
+  command -v npx >/dev/null 2>&1 || { say "npx not available — skipping tunnelmole"; return 1; }
+  start_provider "tunnelmole" "${LOG_DIR}/tunnelmole.log" \
+    'https://[a-zA-Z0-9-]+\.tunnelmole\.(net|com)' \
+    npx --yes tunnelmole "${PORT}" || return 1
   if verify_tunnel "$TUNNEL_URL" 8 "$require_ws"; then return 0; fi
   drop_provider; return 1
 }
