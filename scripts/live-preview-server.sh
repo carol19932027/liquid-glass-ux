@@ -83,10 +83,13 @@ record_attempt() { # name url http client ws note
 }
 
 # Vite's HMR socket: same origin, root path, subprotocol "vite-hmr".
-# A tunnel that cannot proxy the upgrade answers 200 (the HTML shell) instead of 101.
+# --http1.1 is essential: HTTPS tunnel edges negotiate h2 via ALPN, and over HTTP/2
+# the Connection/Upgrade headers are ignored, so the probe would get the HTML shell
+# (200) even on a tunnel that proxies WebSockets perfectly. RFC 8441 (WS over h2)
+# is not what browsers use for Vite HMR either.
 ws_probe() {
   local code
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+  code=$(curl -s --http1.1 -o /dev/null -w '%{http_code}' --max-time 15 \
     -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
     -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
     -H 'Sec-WebSocket-Protocol: vite-hmr' "$1/" 2>/dev/null || true)
@@ -296,7 +299,9 @@ try_cloudflared() { # require_ws
 try_pinggy() { # require_ws
   local require_ws="${1:-1}"
   command -v ssh >/dev/null 2>&1 || { say "ssh not available — skipping pinggy"; return 1; }
-  start_provider "pinggy" "${LOG_DIR}/pinggy.log" 'https://[a-zA-Z0-9-]+\.a\.pinggy\.io' \
+  # free tier hands out https://<id>.run.pinggy-free.link (paid: <id>.a.pinggy.io)
+  start_provider "pinggy" "${LOG_DIR}/pinggy.log" \
+    'https://[a-zA-Z0-9.-]+\.(run\.pinggy-free\.link|a\.pinggy\.io)' \
     ssh -p 443 -R0:localhost:${PORT} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -o ServerAliveInterval=30 -o LogLevel=INFO a.pinggy.io || return 1
   if verify_tunnel "$TUNNEL_URL" 8 "$require_ws"; then return 0; fi
