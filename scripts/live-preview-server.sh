@@ -336,7 +336,7 @@ main() {
     exit 1
   fi
 
-  local providers=(try_cloudflared try_pinggy try_localhostrun) require_ws provider
+  local providers=(try_cloudflared try_pinggy try_localhostrun try_tunnelmole) require_ws provider
   # Pass 1: require a working WebSocket upgrade (101) — that is what makes HMR live.
   # Pass 2: accept HTTP-only so the preview still exists if no tunnel can proxy WSS.
   for require_ws in 1 0; do
