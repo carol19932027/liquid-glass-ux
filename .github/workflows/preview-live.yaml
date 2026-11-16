@@ -10,7 +10,7 @@ on:
       duration_minutes:
         description: "Minutes to keep the live preview server & branch sync active"
         required: false
-        default: "30"
+        default: "60"
         type: string
 
 permissions:
@@ -29,6 +29,7 @@ jobs:
     env:
       PREVIEW_MINUTES: ${{ inputs.duration_minutes || '60' }}
       SYNC_BRANCH: ${{ github.head_ref || github.ref_name }}
+      PORT: "5173"
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,159 +57,14 @@ jobs:
           sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
           cloudflared --version
 
-      - name: Start Vite HMR live server, publish preview URL & sync branch updates
+      # Starts Vite (HMR over WSS), exposes it through the first tunnel provider
+      # that verifies healthy (cloudflared -> pinggy -> localhost.run), publishes
+      # the verified URL to the commit / PR / job summary, then keeps the runner
+      # workspace synced with origin/<branch> for PREVIEW_MINUTES.
+      # On failure it posts full diagnostics (DNS, curl -v, provider + vite logs)
+      # as a commit comment, since runner logs are not readable from every client.
+      - name: Run Vite HMR live server & sync branch updates
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VITE_TUNNEL: "1"
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-        run: |
-          set -euo pipefail
-
-          # 1. Launch Vite dev server with HMR enabled on 0.0.0.0:5173
-          nohup npm run dev > /tmp/vite.log 2>&1 &
-          VITE_PID=$!
-
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:5173/ > /dev/null 2>&1; then
-              echo "Vite dev server ready on port 5173 (PID $VITE_PID)"
-              break
-            fi
-            sleep 1
-          done
-          curl -fsS http://127.0.0.1:5173/ > /dev/null
-
-          # 2. Open Cloudflare HTTPS tunnel (forwards HTTP + WebSocket HMR over WSS/443).
-          #    --protocol http2 keeps the tunnel reliable on runners where UDP/QUIC is filtered.
-          nohup cloudflared tunnel --no-autoupdate --protocol http2 \
-            --url http://127.0.0.1:5173 > /tmp/cloudflared.log 2>&1 &
-          CF_PID=$!
-
-          TUNNEL_URL=""
-          for i in $(seq 1 45); do
-            TUNNEL_URL=$(grep -Eo 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' /tmp/cloudflared.log | head -n 1 || true)
-            if [ -n "$TUNNEL_URL" ]; then
-              break
-            fi
-            sleep 1
-          done
-
-          if [ -z "$TUNNEL_URL" ]; then
-            echo "::error::Failed to obtain Cloudflare Quick Tunnel URL"
-            cat /tmp/cloudflared.log || true
-            exit 1
-          fi
-
-          # 3. Verify the tunnel end-to-end before advertising it:
-          #    HTML shell + Vite HMR client script + WebSocket upgrade handshake.
-          #    Cloudflare prints the URL before the edge is reachable, so retry.
-          probe() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$@" || true; }
-
-          HTTP_CODE="000"
-          CLIENT_CODE="000"
-          for attempt in $(seq 1 15); do
-            HTTP_CODE=$(probe "${TUNNEL_URL}/"); HTTP_CODE=${HTTP_CODE:-000}
-            CLIENT_CODE=$(probe "${TUNNEL_URL}/@vite/client"); CLIENT_CODE=${CLIENT_CODE:-000}
-            if [ "$HTTP_CODE" = "200" ] && [ "$CLIENT_CODE" = "200" ]; then
-              echo "Tunnel healthy after ${attempt} attempt(s)"
-              break
-            fi
-            echo "Tunnel not ready (attempt ${attempt}/15: /=${HTTP_CODE}, /@vite/client=${CLIENT_CODE}); retrying in 4s..."
-            sleep 4
-          done
-
-          WS_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
-            -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
-            -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
-            -H 'Sec-WebSocket-Protocol: vite-hmr' \
-            "${TUNNEL_URL}/" || true)
-          WS_CODE=${WS_CODE:-000}
-
-          echo "Tunnel check: / -> ${HTTP_CODE}, /@vite/client -> ${CLIENT_CODE}, WS upgrade -> ${WS_CODE}"
-          if [ "$HTTP_CODE" != "200" ] || [ "$CLIENT_CODE" != "200" ]; then
-            echo "::error::Tunnel unhealthy after 15 attempts (/=${HTTP_CODE}, /@vite/client=${CLIENT_CODE})"
-            echo "--- cloudflared.log (tail) ---"; tail -n 40 /tmp/cloudflared.log || true
-            echo "--- vite.log (tail) ---"; tail -n 20 /tmp/vite.log || true
-            kill "$CF_PID" "$VITE_PID" 2>/dev/null || true
-            exit 1
-          fi
-          if [ "$WS_CODE" != "101" ]; then
-            echo "::warning::WebSocket upgrade returned ${WS_CODE} instead of 101 — HMR may fall back to polling"
-          fi
-
-          echo "::notice title=Vite Live Preview (HMR)::${TUNNEL_URL} (verified: / ${HTTP_CODE}, /@vite/client ${CLIENT_CODE}, WS ${WS_CODE})"
-
-          # Publish the URL *while the job is still running* so it is discoverable
-          # immediately (step summaries and annotations only appear after completion):
-          # a commit comment on HEAD, plus a PR comment when an open PR exists.
-          COMMIT_COMMENT_BODY="**Vite HMR live preview:** ${TUNNEL_URL} (branch \`${SYNC_BRANCH}\`, active for ${PREVIEW_MINUTES} minutes) — verified \`/\` ${HTTP_CODE}, \`/@vite/client\` ${CLIENT_CODE}, WS upgrade ${WS_CODE} — run ${GITHUB_RUN_ID}"
-          gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
-            -f body="$COMMIT_COMMENT_BODY" > /dev/null 2>&1 || \
-            echo "::warning::Could not post commit comment with the preview URL (check contents: write permission)"
-
-          # Write GitHub Actions Job Summary
-          {
-            echo "## Vite Live Preview Server (HMR Enabled)"
-            echo ""
-            echo "- **Live URL:** [${TUNNEL_URL}](${TUNNEL_URL})"
-            echo "- **Synced Branch:** \`${SYNC_BRANCH}\`"
-            echo "- **Active Duration:** ${PREVIEW_MINUTES} minutes"
-            echo "- **Hot Module Replacement:** Enabled over WSS (\`clientPort: 443\`)"
-            echo "- **Tunnel verified:** \`/\` → ${HTTP_CODE}, \`/@vite/client\` → ${CLIENT_CODE}, WS upgrade → ${WS_CODE}"
-            echo ""
-            echo "Pushing new commits to \`${SYNC_BRANCH}\` while this job is active automatically syncs the runner workspace and triggers Vite HMR in connected browsers."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          # Comment on PR if triggered from or associated with an open PR
-          TARGET_PR="$PR_NUMBER"
-          if [ -z "$TARGET_PR" ]; then
-            TARGET_PR=$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty' || true)
-          fi
-          if [ -n "$TARGET_PR" ]; then
-            BODY="<!-- vite-hmr-live-preview -->
-          ### Vite Live Preview (HMR Active)
-          - **Live URL:** ${TUNNEL_URL}
-          - **Synced Branch:** \`${SYNC_BRANCH}\`
-          - **Run:** [${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
-
-          _Workspace polls \`origin/${SYNC_BRANCH}\` every 5s and hot-reloads changes via Vite HMR for ${PREVIEW_MINUTES} minutes._"
-            EXISTING_COMMENT=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${TARGET_PR}/comments" \
-              --jq '.[] | select(.body | contains("<!-- vite-hmr-live-preview -->")) | .id' | head -n 1 || true)
-            if [ -n "$EXISTING_COMMENT" ]; then
-              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${EXISTING_COMMENT}" -f body="$BODY" > /dev/null || true
-            else
-              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${TARGET_PR}/comments" -f body="$BODY" > /dev/null || true
-            fi
-          fi
-
-          # 4. Continuous workspace sync loop: polls remote branch and applies updates in-place for HMR
-          END_TIME=$(( $(date +%s) + PREVIEW_MINUTES * 60 ))
-          CURRENT_SHA=$(git rev-parse HEAD)
-          echo "Live preview running at ${TUNNEL_URL} (tracking origin/${SYNC_BRANCH} @ ${CURRENT_SHA})"
-
-          while [ "$(date +%s)" -lt "$END_TIME" ]; do
-            if ! kill -0 "$VITE_PID" 2>/dev/null; then
-              echo "Vite process exited; restarting..."
-              nohup npm run dev >> /tmp/vite.log 2>&1 &
-              VITE_PID=$!
-            fi
-
-            if git fetch --quiet origin "$SYNC_BRANCH" 2>/dev/null; then
-              REMOTE_SHA=$(git rev-parse FETCH_HEAD)
-              if [ "$REMOTE_SHA" != "$CURRENT_SHA" ]; then
-                echo "Detected workspace update on ${SYNC_BRANCH}: ${CURRENT_SHA} -> ${REMOTE_SHA}"
-                CHANGED_FILES=$(git diff --name-only "$CURRENT_SHA" "$REMOTE_SHA" || true)
-                git reset --hard "$REMOTE_SHA"
-                if echo "$CHANGED_FILES" | grep -Eq '(^|/)package(-lock)?\.json$'; then
-                  echo "Dependencies changed; running npm ci..."
-                  npm ci --no-audit --no-fund
-                fi
-                CURRENT_SHA="$REMOTE_SHA"
-                echo "Workspace synced to ${CURRENT_SHA}; Vite HMR notified."
-              fi
-            fi
-
-            sleep 5
-          done
-
-          echo "Preview window (${PREVIEW_MINUTES}m) finished; shutting down."
-          kill "$CF_PID" "$VITE_PID" 2>/dev/null || true
+        run: bash scripts/live-preview-server.sh
