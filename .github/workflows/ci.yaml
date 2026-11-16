@@ -1,12 +1,8 @@
 name: CI
 
-# Pull requests (forks included) and every branch except main. No secrets and
-# read-only rights: this workflow can check, never deploy. main is covered by
-# the `verify` job in deploy-production.yaml, which gates the deploy.
 on:
   pull_request:
   push:
-    branches-ignore: [main]
 
 permissions:
   contents: read
@@ -34,6 +30,3 @@ jobs:
 
       - name: Type check and build
         run: npm run build
-
-      - name: Render Kubernetes manifests
-        run: kubectl kustomize k8s/overlays/prod > /dev/null

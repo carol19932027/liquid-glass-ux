@@ -78,7 +78,6 @@ src/glass/liquid-glass.ts  the DOM side: layers, filters, resize handling
 src/glass/liquid-glass.css the look of every layer
 src/main.ts                demo setup: dark switch, titles in the glass, parking
 src/demo.css               demo page styles
-Dockerfile, deploy/, k8s/  how the live demo is hosted (nginx on Kubernetes)
 ```
 
 ## License
