@@ -273,19 +273,24 @@ start_provider() {
 drop_provider() { [ -n "$PROVIDER_PID" ] && kill "$PROVIDER_PID" 2>/dev/null; PROVIDER_PID=""; }
 
 try_cloudflared() { # require_ws
-  local require_ws="${1:-1}" protocol="quic"
+  local require_ws="${1:-1}" protocol="quic" attempts=10 round
   # quic (cloudflared default) proxies WebSocket upgrades; http2 does not reliably,
   # so it is only used when HMR over WSS is not required.
-  [ "$require_ws" = "1" ] || protocol="http2"
+  if [ "$require_ws" != "1" ]; then protocol="http2"; attempts=15; fi
   command -v cloudflared >/dev/null 2>&1 || { say "cloudflared not installed — skipping"; return 1; }
   # --edge-ip-version 4: runners often lack IPv6 egress, and quic silently stalls
   # when it tries an IPv6 edge address (the URL is printed but never reachable).
-  start_provider "cloudflared-${protocol}" "${LOG_DIR}/cloudflared-${protocol}.log" \
-    'https://[a-zA-Z0-9-]+\.trycloudflare\.com' \
-    cloudflared tunnel --no-autoupdate --protocol "$protocol" --edge-ip-version 4 \
-      --url "http://127.0.0.1:${PORT}" || return 1
-  if verify_tunnel "$TUNNEL_URL" 8 "$require_ws"; then return 0; fi
-  drop_provider; return 1
+  # A stalled registration never recovers, so restart the tunnel once before giving up.
+  for round in 1 2; do
+    start_provider "cloudflared-${protocol}" "${LOG_DIR}/cloudflared-${protocol}.log" \
+      'https://[a-zA-Z0-9-]+\.trycloudflare\.com' \
+      cloudflared tunnel --no-autoupdate --protocol "$protocol" --edge-ip-version 4 \
+        --url "http://127.0.0.1:${PORT}" || { [ "$round" = "2" ] && return 1; continue; }
+    if verify_tunnel "$TUNNEL_URL" "$attempts" "$require_ws"; then return 0; fi
+    drop_provider
+    [ "$round" = "1" ] && say "restarting cloudflared (${protocol}) — round 2"
+  done
+  return 1
 }
 
 try_pinggy() { # require_ws
