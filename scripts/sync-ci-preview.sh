@@ -18,7 +18,7 @@ while true; do
     git add -A
     if ! git diff --cached --quiet; then
       TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-      git commit -m "chore(sync): workspace HMR sync ${TIMESTAMP}" --no-verify
+      git commit -m "chore(sync): workspace HMR sync ${TIMESTAMP} [skip ci]" --no-verify
       git push origin "$BRANCH"
       echo "[${TIMESTAMP}] Pushed workspace changes to origin/${BRANCH}"
     fi
