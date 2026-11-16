@@ -9,7 +9,8 @@
     "check": "tsc",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "sync:ci": "bash scripts/sync-ci-preview.sh"
+    "sync:ci": "bash scripts/sync-ci-preview.sh",
+    "guard:glass": "bash scripts/guard-glass.sh"
   },
   "devDependencies": {
     "typescript": "~5.9",

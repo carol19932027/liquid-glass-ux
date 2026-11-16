@@ -12,7 +12,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  guard-glass:
+    name: Glass library protection
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GUARD_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+      GUARD_HEAD_REF: ${{ github.sha }}
+      GUARD_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+      GUARD_PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Enforce src/glass protection
+        run: bash scripts/guard-glass.sh
+
   verify:
+    needs: guard-glass
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
