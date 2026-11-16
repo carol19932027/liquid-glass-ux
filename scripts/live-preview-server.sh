@@ -157,7 +157,24 @@ publish_success() {
 - branch: \`${SYNC_BRANCH}\`
 - window: ${PREVIEW_MINUTES} minutes
 - verified: \`/\` → ${HTTP_CODE}, \`/@vite/client\` → ${CLIENT_CODE}, WebSocket upgrade → ${WS_CODE}
-- run: ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-}/actions/runs/${GITHUB_RUN_ID:-}"
+- run: ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-}/actions/runs/${GITHUB_RUN_ID:-}
+
+**Provider attempts**
+$(cat "$ATTEMPTS_LOG" 2>/dev/null || true)"
+
+  if [ "$WS_CODE" != "101" ]; then
+    # HMR needs a 101 upgrade; include the full diagnostics so the degraded
+    # fallback can be understood without access to the runner logs.
+    body="${body}
+
+> ⚠️ WebSocket upgrade did not return 101 — the page is served, but Vite HMR will not
+> hot-update. Diagnostics from every provider attempt:
+
+\`\`\`
+$(collect_diagnostics "$TUNNEL_URL")
+\`\`\`"
+    echo "::warning::Preview is HTTP-only (WS ${WS_CODE}); Vite HMR will not hot-update"
+  fi
 
   if gh_available && [ -n "${GITHUB_SHA:-}" ]; then
     gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -f body="$body" >/dev/null 2>&1 \
