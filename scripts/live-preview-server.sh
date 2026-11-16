@@ -75,6 +75,13 @@ wait_local_vite() {
 # --------------------------------------------------------------------------
 probe() { curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$@" 2>/dev/null || true; }
 
+# Every provider attempt is recorded so the outcome is readable from the commit
+# comment — GitHub runner logs are not reachable from every API client.
+record_attempt() { # name url http client ws note
+  printf -- '- `%s` %s → / %s, /@vite/client %s, WS %s — %s\n' \
+    "${1:-unknown}" "${2:-<no url>}" "${3:-000}" "${4:-000}" "${5:-000}" "${6:-}" >> "$ATTEMPTS_LOG"
+}
+
 # Vite's HMR socket: same origin, root path, subprotocol "vite-hmr".
 # A tunnel that cannot proxy the upgrade answers 200 (the HTML shell) instead of 101.
 ws_probe() {
