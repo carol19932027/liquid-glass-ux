@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
-      PREVIEW_MINUTES: ${{ inputs.duration_minutes || '20' }}
+      PREVIEW_MINUTES: ${{ inputs.duration_minutes || '60' }}
       SYNC_BRANCH: ${{ github.head_ref || github.ref_name }}
     steps:
       - name: Check out source
@@ -77,8 +77,10 @@ jobs:
           done
           curl -fsS http://127.0.0.1:5173/ > /dev/null
 
-          # 2. Open Cloudflare HTTPS tunnel (forwards HTTP + WebSocket HMR over WSS/443)
-          nohup cloudflared tunnel --no-autoupdate --url http://127.0.0.1:5173 > /tmp/cloudflared.log 2>&1 &
+          # 2. Open Cloudflare HTTPS tunnel (forwards HTTP + WebSocket HMR over WSS/443).
+          #    --protocol http2 keeps the tunnel reliable on runners where UDP/QUIC is filtered.
+          nohup cloudflared tunnel --no-autoupdate --protocol http2 \
+            --url http://127.0.0.1:5173 > /tmp/cloudflared.log 2>&1 &
           CF_PID=$!
 
           TUNNEL_URL=""
@@ -98,18 +100,35 @@ jobs:
 
           # 3. Verify the tunnel end-to-end before advertising it:
           #    HTML shell + Vite HMR client script + WebSocket upgrade handshake.
-          HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${TUNNEL_URL}/" || echo "000")
-          CLIENT_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${TUNNEL_URL}/@vite/client" || echo "000")
+          #    Cloudflare prints the URL before the edge is reachable, so retry.
+          probe() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$@" || true; }
+
+          HTTP_CODE="000"
+          CLIENT_CODE="000"
+          for attempt in $(seq 1 15); do
+            HTTP_CODE=$(probe "${TUNNEL_URL}/"); HTTP_CODE=${HTTP_CODE:-000}
+            CLIENT_CODE=$(probe "${TUNNEL_URL}/@vite/client"); CLIENT_CODE=${CLIENT_CODE:-000}
+            if [ "$HTTP_CODE" = "200" ] && [ "$CLIENT_CODE" = "200" ]; then
+              echo "Tunnel healthy after ${attempt} attempt(s)"
+              break
+            fi
+            echo "Tunnel not ready (attempt ${attempt}/15: /=${HTTP_CODE}, /@vite/client=${CLIENT_CODE}); retrying in 4s..."
+            sleep 4
+          done
+
           WS_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
             -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
             -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
             -H 'Sec-WebSocket-Protocol: vite-hmr' \
-            "${TUNNEL_URL}/" || echo "000")
+            "${TUNNEL_URL}/" || true)
+          WS_CODE=${WS_CODE:-000}
 
           echo "Tunnel check: / -> ${HTTP_CODE}, /@vite/client -> ${CLIENT_CODE}, WS upgrade -> ${WS_CODE}"
           if [ "$HTTP_CODE" != "200" ] || [ "$CLIENT_CODE" != "200" ]; then
-            echo "::error::Tunnel reachable but unhealthy (/=${HTTP_CODE}, /@vite/client=${CLIENT_CODE}); see /tmp/cloudflared.log"
-            tail -n 40 /tmp/cloudflared.log || true
+            echo "::error::Tunnel unhealthy after 15 attempts (/=${HTTP_CODE}, /@vite/client=${CLIENT_CODE})"
+            echo "--- cloudflared.log (tail) ---"; tail -n 40 /tmp/cloudflared.log || true
+            echo "--- vite.log (tail) ---"; tail -n 20 /tmp/vite.log || true
+            kill "$CF_PID" "$VITE_PID" 2>/dev/null || true
             exit 1
           fi
           if [ "$WS_CODE" != "101" ]; then
