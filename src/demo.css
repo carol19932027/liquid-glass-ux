@@ -599,55 +599,40 @@ pre .k {
   }
 }
 /* --- The morph rail -------------------------------------------------------
-   One glass pill that splits into a round button and a dot pill, in the
-   vocabulary reverse-engineered from nordify.io: a single data-state
-   attribute, layout transitions (width, visibility) with a spring easing,
-   staggered children, and content crossfaded as two layers in one grid
-   cell. Both glass hosts keep a 56px short side in every state, so the
-   morph only re-lays tiles and never rebakes a map (HOW-IT-WORKS §8); no
-   transform ever touches a glass host, and both hosts carry min-width:
-   56px so the spring can never undershoot the height and turn the width
-   into the short side mid-motion (a rebake there swaps maps under a
-   moving host and flashes). The rail box hugs its morph host and is
-   fixed at the bottom centre with its LEFT edge pinned where the
-   centred label pill's left cap sits, so that cap — the one that
-   becomes the round GitHub button, on the left as in the reference
-   art — never travels: the dots piece peels out to the right from
-   behind the pill. Both hosts are created with reflect: false:
-   the reflection layer overhangs its box on every side, and at a 10px
-   gap the two overhangs overlapped — two backdrop roots filtering each
-   other and invalidating one another every frame, which is what blinked
-   the glass out in the compact state, in every placement, still or
-   scrolling. The rail also lives outside <main>, because the library
-   promotes main into a layer of its own (will-change: transform), making
-   it a backdrop root that would swallow a fixed glass's backdrop.
-
-   Choreography, per direction:
-   open  - the pill shrinks with the spring; the dot pill appears at 60ms
-           and stretches; its dots pop in staggered; the icon follows the
-           label out at 120ms.
-   close - the dots collapse first, the dot pill slides back under the
-           left cap with an ease-in and is gone at 220ms, its visibility
-           flip landing behind glass, the icon leaves by 160ms and the
-           label returns from 180ms. */
+   One glass pill that splits into a round button and a dot pill, rebuilt
+   from nordify.io's own source (specialization-showcase): the wide pill
+   and the split pair share ONE footprint — --rail-w = --btn + --gap +
+   --pill — so nothing ever travels horizontally, and the "entering from
+   off-screen" feel of a sliding piece cannot happen. The split: the
+   pill's width springs to --btn on the left (width .58s cubic-bezier(.3,
+   1.85,.45,1), the reference's spring) while the dot pill rises 24px up
+   into its fixed slot on the right (.54s pop spring) and its dots
+   stagger in at 60ms + i*40ms. The merge: the dot pill drops those 24px
+   in .2s and its visibility flip lands at the end of the drop, and the
+   pill grows back over the whole footprint. Both directions carry the
+   reference's
+   anticipation nudge: the morph host translates +25px (wide) / +20px
+   (round) at 28% of a .62s linear run and springs back with the pop
+   curve — translate composites from existing pixels, where scale would
+   re-raster and flash (HOW-IT-WORKS §8). The label pops in per character
+   (stagger 16ms from .1s) and flies out per character (9ms); the icon
+   crossfades like the reference's
+   ctrlIconLayer. Both glass hosts keep a 56px short side (min-width
+   guards the spring's undershoot from rebaking mid-motion), both are
+   created with reflect: false (overlapping reflection overhangs blinked
+   the glass out), and the rail lives outside <main> because promote
+   makes main a backdrop root. Ink switches in ONE STEP with
+   html.end-dark: §6 lists a scroll-tied blend among the flickers. */
 .rail {
   --rail-w: 236px;
-  /* Fixed again, bottom centre. The blink was never the positioning: it
-     was the two reflection layers overhanging into each other (see the
-     reflect: false note in main.ts), and that is gone. The box hugs the
-     morph host and pins its left edge to where the centred label pill's
-     left cap sits, so the cap that becomes the round GitHub button
-     never travels: the dots piece peels rightwards from a fixed point,
-     and the button ends up on the left, as in the reference art. The
-   ink follows the page half through the existing html.end-dark class,
-   switched in ONE STEP at the boundary the way the library switches its
-   own dark tuning: a colour transition would repaint the glass every
-   frame for 300ms while scrolling, the scroll-tied blend HOW-IT-WORKS
-   §6 lists among its flickering attempts. */
+  --btn: 56px;
+  --gap: 10px;
+  --pill: 170px;
   position: fixed;
   bottom: clamp(16px, 3vh, 28px);
   left: calc(50% - var(--rail-w) / 2);
   z-index: 40;
+  width: var(--rail-w);
   display: flex;
   align-items: center;
   color: oklch(0.34 0.02 var(--hue));
@@ -662,31 +647,50 @@ html.end-dark .rail {
   position: relative;
 }
 
-/* Host 1: the labelled pill, and the round button once split. Sits one
-   step above the dots piece so the split reads as one element dividing:
-   the dots slide out from behind it, and slide back under it to merge. */
+/* Host 1: the labelled pill, and the round button once split. The
+   reference's spring on width, plus its anticipation nudge keyed to the
+   state class; .rail-armed (set on the first switch) keeps the rail
+   still on load. One step above the dots piece, like the reference's
+   playPauseBtn over its dotsPill. */
 .rail-morph {
   display: grid;
   width: var(--rail-w);
-  /* The spring may not undershoot below the height: once the width became
-     the short side, the ratchet would rebake mid-motion and swap maps
-     under a moving host, which flashes (HOW-IT-WORKS §8, pitfalls). */
+  /* min-width keeps the spring's undershoot from turning the width into
+     the short side mid-motion (a rebake there swaps maps under a moving
+     host and flashes, HOW-IT-WORKS §8). */
   min-width: 56px;
   color: inherit;
   text-decoration: none;
-  z-index: 1;
-  transition: width 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+  transition: width 0.58s cubic-bezier(0.3, 1.85, 0.45, 1);
 }
 
-/* The library's cover has to stay above its own host; both above the
-   dots piece, which lives one step down. */
 .rail-morph + .lg-cover {
-  z-index: 1;
+  z-index: 2;
 }
 
 .rail[data-state="compact"] .rail-morph {
-  width: 56px;
-  transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  width: var(--btn);
+}
+
+.rail.rail-armed[data-state="label"] .rail-morph {
+  animation: rail-nudge-wide 0.62s linear both;
+}
+
+.rail.rail-armed[data-state="compact"] .rail-morph {
+  animation: rail-nudge-round 0.62s linear both;
+}
+
+@keyframes rail-nudge-wide {
+  0% { translate: 0 0; animation-timing-function: cubic-bezier(0.38, 0, 0.24, 1); }
+  28% { translate: 25px 0; animation-timing-function: cubic-bezier(0.3, 1.92, 0.45, 1); }
+  100% { translate: 0 0; }
+}
+
+@keyframes rail-nudge-round {
+  0% { translate: 0 0; animation-timing-function: cubic-bezier(0.38, 0, 0.24, 1); }
+  28% { translate: 20px 0; animation-timing-function: cubic-bezier(0.3, 1.92, 0.45, 1); }
+  100% { translate: 0 0; }
 }
 
 /* The two faces share one grid cell. */
@@ -698,63 +702,95 @@ html.end-dark .rail {
   gap: 8px;
 }
 
+/* The label rides the reference's ctaLabel/ctaChar pattern: the face
+   slides in from -22px on the pop spring (.65s, .1s delay) while its
+   characters stagger in one by one (.1s + c*16ms) from below; on the
+   way out the face shifts back in .16s and the characters fly up, 9ms
+   apart. Characters are children of the host, free to transform (§8);
+   the face's visibility flip lands after the last character is out. */
 .rail-label {
   font-size: 0.9375rem;
   font-weight: 500;
   letter-spacing: -0.01em;
   white-space: nowrap;
   transition:
-    opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.18s,
-    translate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.18s,
+    translate 0.65s cubic-bezier(0.3, 1.92, 0.45, 1) 0.1s,
     visibility 0s;
 }
 
 .rail[data-state="compact"] .rail-label {
-  opacity: 0;
-  translate: 0 -12px;
+  translate: -22px 0;
   visibility: hidden;
   transition:
-    opacity 0.16s cubic-bezier(0.16, 1, 0.3, 1),
-    translate 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
-    visibility 0s linear 0.16s;
+    translate 0.16s cubic-bezier(0.38, 0, 0.24, 1),
+    visibility 0s linear 0.24s;
 }
 
+.rail-char {
+  display: inline-block;
+  transition:
+    opacity 0.35s cubic-bezier(0.3, 1.4, 0.5, 1) calc(0.1s + var(--c) * 16ms),
+    translate 0.62s cubic-bezier(0.3, 1.92, 0.45, 1) calc(0.1s + var(--c) * 16ms),
+    scale 0.62s cubic-bezier(0.3, 1.92, 0.45, 1) calc(0.1s + var(--c) * 16ms);
+}
+
+.rail[data-state="compact"] .rail-char {
+  opacity: 0;
+  translate: 0 -14px;
+  scale: 0.9;
+  transition:
+    opacity 0.16s cubic-bezier(0.38, 0, 0.24, 1) calc(var(--c) * 9ms),
+    translate 0.22s cubic-bezier(0.38, 0, 0.24, 1) calc(var(--c) * 9ms),
+    scale 0.22s cubic-bezier(0.38, 0, 0.24, 1) calc(var(--c) * 9ms);
+}
+
+/* The icon follows the reference's ctrlIconLayer: in with .38s opacity
+   (.14s) and a .65s pop slide from -24px (.12s), out in .16s/.22s on
+   the blunt ease, its visibility flip behind the exit. */
 .rail-icon {
   opacity: 0;
-  translate: 0 12px;
+  translate: -24px 0;
+  scale: 0.6;
   visibility: hidden;
   transition:
-    opacity 0.16s cubic-bezier(0.16, 1, 0.3, 1),
-    translate 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
-    visibility 0s linear 0.16s;
+    opacity 0.16s cubic-bezier(0.38, 0, 0.24, 1),
+    translate 0.22s cubic-bezier(0.38, 0, 0.24, 1),
+    scale 0.22s cubic-bezier(0.38, 0, 0.24, 1),
+    visibility 0s linear 0.22s;
 }
 
 .rail[data-state="compact"] .rail-icon {
   opacity: 1;
   translate: 0 0;
+  scale: 1;
   visibility: visible;
   transition:
-    opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.12s,
-    translate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s,
+    opacity 0.38s cubic-bezier(0.3, 1.4, 0.5, 1) 0.14s,
+    translate 0.65s cubic-bezier(0.3, 1.92, 0.45, 1) 0.12s,
+    scale 0.65s cubic-bezier(0.3, 1.92, 0.45, 1) 0.12s,
     visibility 0s;
 }
 
-/* Host 2: the dots piece. While hidden it tucks INSIDE the pill, under
-   its left cap (left: 0, one stacking step below the morph host) — not
-   parked outside on the right, which is what made the split look like
-   a pill entering from off-screen. Switching on, the pill collapses
-   into its left cap while this piece slides right out from behind it:
-   one element dividing in two, round button on the left as in the
-   reference. Switching off, it slides back under the cap with an
-   ease-in and the visibility flip lands behind glass, where nobody
-   sees it: two pieces merging into one. Visibility, not opacity — an
-   opacity below 1 on a glass host would make it a backdrop root. */
+/* Host 2: the dots pill. Parked permanently in its own slot right of
+   the round button — the reference's fixed left: calc(btn + gap),
+   width: pill inside a constant-width bar. It never travels sideways,
+   so the "pill entering from off-screen" reading cannot happen: the
+   split is VERTICAL. Switching on, it rises 24px up into the slot
+   (.54s pop spring, the reference's unmorphDotsPill) while the morph
+   pill shrinks away above it; switching off, it drops those 24px in
+   .2s (morphDotsPill) and the visibility flip lands at the END of the
+   drop, so the piece sinks away instead of blinking out. It moves via
+   `top`, a layout property, not transform: a transform on a glass host
+   is off-limits (HOW-IT-WORKS §8), and the library follows layout
+   moves of its host frame by frame (its own follow() pass) until it
+   stands still. Visibility, not opacity — an opacity below 1 on a
+   glass host would make it a backdrop root. */
 .rail-dots {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 24px;
+  left: calc(var(--btn) + var(--gap));
   z-index: 0;
-  width: 56px;
+  width: var(--pill);
   min-width: 56px;
   display: flex;
   align-items: center;
@@ -762,50 +798,61 @@ html.end-dark .rail {
   gap: 11px;
   visibility: hidden;
   transition:
-    left 0.22s cubic-bezier(0.4, 0, 1, 1),
-    width 0.22s cubic-bezier(0.4, 0, 1, 1),
-    visibility 0s linear 0.22s;
+    top 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 0.2s;
 }
 
 /* The library parks two siblings beside every host — a tick before it
    and a cover after it — and neither is a descendant, so hiding the
    host never hid them: the hidden host's cover kept painting its
    underlay and edge light as a bare disc beside the pill (the ghost
-   circle). Hide the siblings with the host, same delays. */
+   circle). Their geometry rides the host by itself (anchor positioning
+   where the browser has it, the library's follow() otherwise), but
+   their VISIBILITY has to mirror the host's, with the same delays:
+   visible for the whole .2s drop, gone when it lands; back at once on
+   the rise. */
 .rail-dots + .lg-cover,
 .lg-tick:has(+ .rail-dots) {
   visibility: hidden;
-  transition: visibility 0s linear 0.22s;
+  transition: visibility 0s linear 0.2s;
 }
 
 .rail[data-state="compact"] .rail-dots + .lg-cover,
 .rail[data-state="compact"] .lg-tick:has(+ .rail-dots) {
   visibility: visible;
-  transition: visibility 0s linear 0.06s;
+  transition: visibility 0s;
 }
 
 .rail[data-state="compact"] .rail-dots {
-  left: calc(100% + 10px);
-  width: 152px;
+  top: 0;
   visibility: visible;
   transition:
-    left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.06s,
-    width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.06s,
-    visibility 0s linear 0.06s;
+    top 0.54s cubic-bezier(0.3, 1.92, 0.45, 1),
+    visibility 0s;
 }
 
-/* The dot itself is a 7px layout box that only scales (the stagger);
-   the visible ink is a child pseudo, out of the flow, so the hover
-   stretch into a bar is carried by the child and never shifts a
-   neighbour — hover motion that moves siblings slides them out from
-   under their own pointer. The second pseudo widens the tap target
-   without widening the layout. */
+/* The dot itself is a 7px layout box; the visible ink is a child
+   pseudo, out of the flow, so the hover stretch into a bar is carried
+   by the child and never shifts a neighbour — hover motion that moves
+   siblings slides them out from under their own pointer. The second
+   pseudo widens the tap target without widening the layout. The box
+   carries the reference's dot-item choreography: in, it rises from
+   below and unfolds (.56s cubic-bezier(.3,1.95,.45,1), staggered
+   60ms + i*40ms, backwards-fill in the original); out, it sinks away
+   right-and-down in .16s with a REVERSE stagger, last dot first
+   ((5 - i)*6ms), so the pill empties back into the button in the
+   order it came out of. Children of a host may transform freely (§8). */
 .rail-dot {
   position: relative;
   width: 7px;
   height: 7px;
-  scale: 0;
-  transition: scale 0.14s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--i) * 15ms);
+  opacity: 0;
+  translate: 8px 14px;
+  scale: 0.5 0.8;
+  transition:
+    opacity 0.16s cubic-bezier(0.16, 1, 0.3, 1) calc((5 - var(--i)) * 6ms),
+    translate 0.16s cubic-bezier(0.16, 1, 0.3, 1) calc((5 - var(--i)) * 6ms),
+    scale 0.16s cubic-bezier(0.16, 1, 0.3, 1) calc((5 - var(--i)) * 6ms);
 }
 
 .rail-dot::before {
@@ -834,8 +881,13 @@ html.end-dark .rail {
 }
 
 .rail[data-state="compact"] .rail-dot {
+  opacity: 1;
+  translate: 0 0;
   scale: 1;
-  transition: scale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.14s + var(--i) * 55ms);
+  transition:
+    opacity 0.56s cubic-bezier(0.3, 1.95, 0.45, 1) calc(60ms + var(--i) * 40ms),
+    translate 0.56s cubic-bezier(0.3, 1.95, 0.45, 1) calc(60ms + var(--i) * 40ms),
+    scale 0.56s cubic-bezier(0.3, 1.95, 0.45, 1) calc(60ms + var(--i) * 40ms);
 }
 
 /* The stretch from the reference: the child ink grows into a bar under
@@ -925,5 +977,8 @@ html.end-dark .morph-switch {
   .morph-switch * {
     transition-duration: 1ms !important;
     transition-delay: 0ms !important;
+    /* The reference kills its anticipation animations here too; the
+       state still flips, instantly and legibly. */
+    animation: none !important;
   }
 }

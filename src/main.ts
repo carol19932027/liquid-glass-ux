@@ -350,5 +350,13 @@ const setRailState = (compact: boolean) => {
   }
 };
 
-railSwitch.addEventListener("change", () => setRailState(railSwitch.checked));
+railSwitch.addEventListener("change", () => {
+  // rail-armed enables the reference's anticipation nudge (a keyed
+  // animation on the morph host, translate out to 25px/20px at 28% of a
+  // .62s run and a pop-spring return). It is armed on the first switch
+  // flip only, so the rail never nudges on load, when the state is
+  // written once to match the switch's initial position.
+  rail.classList.add("rail-armed");
+  setRailState(railSwitch.checked);
+});
 setRailState(railSwitch.checked);
