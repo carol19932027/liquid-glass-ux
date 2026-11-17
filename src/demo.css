@@ -599,15 +599,15 @@ pre .k {
   }
 }
 /* --- The morph rail -------------------------------------------------------
-   One glass pill that splits into a round button and a dot pill, rebuilt
+   One glass pill that splits into a bell button and a tab pill, rebuilt
    from nordify.io's own source (specialization-showcase): the wide pill
    and the split pair share ONE footprint — --rail-w = --btn + --gap +
    --pill — so nothing ever travels horizontally, and the "entering from
    off-screen" feel of a sliding piece cannot happen. The split: the
    pill's width springs to --btn on the left (width .58s cubic-bezier(.3,
-   1.85,.45,1), the reference's spring) while the dot pill rises 24px up
-   into its fixed slot on the right (.54s pop spring) and its dots
-   stagger in at 60ms + i*40ms. The merge: the dot pill drops those 24px
+   1.85,.45,1), the reference's spring) while the tab pill rises 24px up
+   into its fixed slot on the right (.54s pop spring) and its tabs
+   stagger in at 60ms + i*40ms. The merge: the tab pill drops those 24px
    in .2s and its visibility flip lands at the end of the drop, and the
    pill grows back over the whole footprint. Both directions carry the
    reference's
@@ -624,10 +624,10 @@ pre .k {
    makes main a backdrop root. Ink switches in ONE STEP with
    html.end-dark: §6 lists a scroll-tied blend among the flickers. */
 .rail {
-  --rail-w: 236px;
+  --rail-w: 322px;
   --btn: 56px;
   --gap: 10px;
-  --pill: 170px;
+  --pill: 256px;
   position: fixed;
   bottom: clamp(16px, 3vh, 28px);
   left: calc(50% - var(--rail-w) / 2);
@@ -647,10 +647,10 @@ html.end-dark .rail {
   position: relative;
 }
 
-/* Host 1: the labelled pill, and the round button once split. The
+/* Host 1: the labelled pill, and the bell button once split. The
    reference's spring on width, plus its anticipation nudge keyed to the
    state class; .rail-armed (set on the first switch) keeps the rail
-   still on load. One step above the dots piece, like the reference's
+   still on load. One step above the tab pill, like the reference's
    playPauseBtn over its dotsPill. */
 .rail-morph {
   display: grid;
@@ -771,8 +771,8 @@ html.end-dark .rail {
     visibility 0s;
 }
 
-/* Host 2: the dots pill. Parked permanently in its own slot right of
-   the round button — the reference's fixed left: calc(btn + gap),
+/* Host 2: the tab pill. Parked permanently in its own slot right of
+   the bell button — the reference's fixed left: calc(btn + gap),
    width: pill inside a constant-width bar. It never travels sideways,
    so the "pill entering from off-screen" reading cannot happen: the
    split is VERTICAL. Switching on, it rises 24px up into the slot
@@ -784,8 +784,10 @@ html.end-dark .rail {
    is off-limits (HOW-IT-WORKS §8), and the library follows layout
    moves of its host frame by frame (its own follow() pass) until it
    stands still. Visibility, not opacity — an opacity below 1 on a
-   glass host would make it a backdrop root. */
-.rail-dots {
+   glass host would make it a backdrop root. The tabs read right to
+   left; dir="rtl" on the host (index.html) makes the first tab the
+   rightmost one. */
+.rail-tabs {
   position: absolute;
   top: 24px;
   left: calc(var(--btn) + var(--gap));
@@ -795,7 +797,8 @@ html.end-dark .rail {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 11px;
+  gap: 6px;
+  padding: 0 8px;
   visibility: hidden;
   transition:
     top 0.2s cubic-bezier(0.16, 1, 0.3, 1),
@@ -811,19 +814,19 @@ html.end-dark .rail {
    their VISIBILITY has to mirror the host's, with the same delays:
    visible for the whole .2s drop, gone when it lands; back at once on
    the rise. */
-.rail-dots + .lg-cover,
-.lg-tick:has(+ .rail-dots) {
+.rail-tabs + .lg-cover,
+.lg-tick:has(+ .rail-tabs) {
   visibility: hidden;
   transition: visibility 0s linear 0.2s;
 }
 
-.rail[data-state="compact"] .rail-dots + .lg-cover,
-.rail[data-state="compact"] .lg-tick:has(+ .rail-dots) {
+.rail[data-state="compact"] .rail-tabs + .lg-cover,
+.rail[data-state="compact"] .lg-tick:has(+ .rail-tabs) {
   visibility: visible;
   transition: visibility 0s;
 }
 
-.rail[data-state="compact"] .rail-dots {
+.rail[data-state="compact"] .rail-tabs {
   top: 0;
   visibility: visible;
   transition:
@@ -831,56 +834,81 @@ html.end-dark .rail {
     visibility 0s;
 }
 
-/* The dot itself is a 7px layout box; the visible ink is a child
-   pseudo, out of the flow, so the hover stretch into a bar is carried
-   by the child and never shifts a neighbour — hover motion that moves
-   siblings slides them out from under their own pointer. The second
-   pseudo widens the tap target without widening the layout. The box
-   carries the reference's dot-item choreography: in, it rises from
+/* The tab is a plain button whose visible state is carried by children:
+   the tint is a ::before ink pill that only fades in opacity, and the
+   label sits in a positioned span above it — so selecting or hovering a
+   tab never changes a box, and a neighbour never slides out from under
+   its own pointer (the hover rule from animate.md). No font-weight swap
+   on select, for the same reason. The box carries the reference's
+   dot-item choreography, retuned for three tabs: in, it rises from
    below and unfolds (.56s cubic-bezier(.3,1.95,.45,1), staggered
-   60ms + i*40ms, backwards-fill in the original); out, it sinks away
-   right-and-down in .16s with a REVERSE stagger, last dot first
-   ((5 - i)*6ms), so the pill empties back into the button in the
-   order it came out of. Children of a host may transform freely (§8). */
-.rail-dot {
+   60ms + i*40ms, rightmost tab first since the bar is RTL); out, it
+   sinks away right-and-down in .16s with a REVERSE stagger
+   ((2 - i)*6ms), so the pill empties back into the button in the order
+   it came out of. Children of a host may transform freely (§8). */
+.rail-tab {
   position: relative;
-  width: 7px;
-  height: 7px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
   opacity: 0;
   translate: 8px 14px;
   scale: 0.5 0.8;
   transition:
-    opacity 0.16s cubic-bezier(0.16, 1, 0.3, 1) calc((5 - var(--i)) * 6ms),
-    translate 0.16s cubic-bezier(0.16, 1, 0.3, 1) calc((5 - var(--i)) * 6ms),
-    scale 0.16s cubic-bezier(0.16, 1, 0.3, 1) calc((5 - var(--i)) * 6ms);
+    opacity 0.16s cubic-bezier(0.16, 1, 0.3, 1) calc((2 - var(--i)) * 6ms),
+    translate 0.16s cubic-bezier(0.16, 1, 0.3, 1) calc((2 - var(--i)) * 6ms),
+    scale 0.16s cubic-bezier(0.16, 1, 0.3, 1) calc((2 - var(--i)) * 6ms);
 }
 
-.rail-dot::before {
+.rail-tab::before {
   content: "";
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  translate: -50% -50%;
-  border-radius: 50%;
-  background: currentColor;
-  transition:
-    width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
-    border-radius 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in oklab, currentColor 13%, transparent);
+  opacity: 0;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.rail-dot::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 28px;
-  height: 28px;
-  translate: -50% -50%;
+.rail-tab > span {
+  position: relative;
+  opacity: 0.72;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.rail[data-state="compact"] .rail-dot {
+/* Pointer feedback stays on the child layers: a faint tint under the
+   hover, full tint on the selected tab (later in the cascade, so it
+   wins the tie over :hover at equal specificity). */
+.rail-tab:hover::before,
+.rail-tab:focus-visible::before {
+  opacity: 0.45;
+}
+
+.rail-tab:hover > span,
+.rail-tab:focus-visible > span {
+  opacity: 1;
+}
+
+.rail-tab[aria-selected="true"]::before {
+  opacity: 1;
+}
+
+.rail-tab[aria-selected="true"] > span {
+  opacity: 1;
+}
+
+.rail-tab:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.rail[data-state="compact"] .rail-tab {
   opacity: 1;
   translate: 0 0;
   scale: 1;
@@ -888,14 +916,6 @@ html.end-dark .rail {
     opacity 0.56s cubic-bezier(0.3, 1.95, 0.45, 1) calc(60ms + var(--i) * 40ms),
     translate 0.56s cubic-bezier(0.3, 1.95, 0.45, 1) calc(60ms + var(--i) * 40ms),
     scale 0.56s cubic-bezier(0.3, 1.95, 0.45, 1) calc(60ms + var(--i) * 40ms);
-}
-
-/* The stretch from the reference: the child ink grows into a bar under
-   the pointer while every neighbour keeps its box. */
-.rail-dot:hover::before,
-.rail-dot:focus-visible::before {
-  width: 26px;
-  border-radius: 4px;
 }
 
 /* --- The morph switch -----------------------------------------------------

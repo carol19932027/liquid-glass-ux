@@ -309,10 +309,10 @@ if (!supportsRefraction) {
 
 // --- The morph rail ---------------------------------------------------------
 // Two glass hosts, one data-state. The switch is the only writer: it flips
-// the rail between the labelled pill and the split round-button-plus-dots,
-// and everything else is the CSS transition set in demo.css. The pill's own
-// href follows the state: in-page while it labels the sections, the
-// repository once it has become the round button.
+// the rail between the labelled pill and the split notification-button-
+// plus-tab-bar, and everything else is the CSS transition set in demo.css.
+// The pill's own href follows the state: in-page while it labels the
+// sections, back to the top once it has become the bell button.
 const rail = document.querySelector<HTMLElement>(".rail")!;
 const railMorph = document.querySelector<HTMLAnchorElement>(".rail-morph")!;
 const railSwitch = document.querySelector<HTMLInputElement>("#morph-switch")!;
@@ -328,12 +328,8 @@ for (const host of document.querySelectorAll<HTMLElement>(".rail-host")) {
 }
 
 const RAIL_STATES = {
-  label: { href: "#accurate", label: "Browse the sections", external: false },
-  compact: {
-    href: "https://github.com/nordify/css-liquid-glass",
-    label: "The repository on GitHub",
-    external: true,
-  },
+  label: { href: "#accurate", label: "Browse the sections" },
+  compact: { href: "#top", label: "Notifications" },
 } as const;
 
 const setRailState = (compact: boolean) => {
@@ -341,14 +337,38 @@ const setRailState = (compact: boolean) => {
   const state = compact ? RAIL_STATES.compact : RAIL_STATES.label;
   railMorph.href = state.href;
   railMorph.setAttribute("aria-label", state.label);
-  if (state.external) {
-    railMorph.target = "_blank";
-    railMorph.rel = "noopener";
-  } else {
-    railMorph.removeAttribute("target");
-    railMorph.removeAttribute("rel");
+};
+
+// The tab bar: three tabs in an RTL island, the selected one wears the ink
+// pill. Selection moves with click and arrow keys (in RTL, ArrowLeft is
+// "forward"), roving tabindex per the tabs pattern; this demo has no tab
+// panels, so the state is purely the rail's own.
+const railTabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".rail-tab"));
+
+const selectTab = (tab: HTMLButtonElement) => {
+  for (const other of railTabs) {
+    const on = other === tab;
+    other.setAttribute("aria-selected", String(on));
+    other.tabIndex = on ? 0 : -1;
   }
 };
+
+for (const [i, tab] of railTabs.entries()) {
+  tab.addEventListener("click", () => selectTab(tab));
+  tab.addEventListener("keydown", (event) => {
+    const last = railTabs.length - 1;
+    const to =
+      event.key === "ArrowLeft" ? Math.min(i + 1, last)
+      : event.key === "ArrowRight" ? Math.max(i - 1, 0)
+      : event.key === "Home" ? 0
+      : event.key === "End" ? last
+      : -1;
+    if (to < 0) return;
+    event.preventDefault();
+    selectTab(railTabs[to]!);
+    railTabs[to]!.focus();
+  });
+}
 
 railSwitch.addEventListener("change", () => {
   // rail-armed enables the reference's anticipation nudge (a keyed
