@@ -77,10 +77,18 @@ const shade = () => {
   glass.style.setProperty("--lg-caustic-o", caustic ? "0.7" : "0");
   document.documentElement.classList.toggle("end-dark", isDark);
 };
+// Scroll events fire faster than frames, and all three readers only need
+// the newest position once per frame: coalesce them into a single rAF
+// callback instead of measuring three times per event.
+let scrollReq = 0;
 addEventListener("scroll", () => {
-  park();
-  shade();
-  showCopy();
+  if (scrollReq) return;
+  scrollReq = requestAnimationFrame(() => {
+    scrollReq = 0;
+    park();
+    shade();
+    showCopy();
+  });
 }, { passive: true });
 
 // Each statement's title is read inside the glass: a copy of it in a layer
@@ -269,13 +277,17 @@ reducedMotion.addEventListener("change", syncReducedMotion);
 // The reflection reads up to 160px around the glass, but Chromium only
 // redraws it for changes under the glass itself. While the video plays near
 // it, refresh once per video frame so it does not freeze in the reflection.
+// requestVideoFrameCallback ships in Chromium and Safari but not in
+// Firefox, where an unguarded call throws a TypeError and kills the rest
+// of this script. Without it the reflection simply refreshes on scroll
+// and resize ticks instead of per video frame.
 const onVideoFrame = () => {
   const v = video.getBoundingClientRect();
   const g = glass.getBoundingClientRect();
   if (v.bottom > g.top - 160 && v.top < g.bottom + 160) lg.refresh();
-  video.requestVideoFrameCallback(onVideoFrame);
+  if ("requestVideoFrameCallback" in video) video.requestVideoFrameCallback(onVideoFrame);
 };
-video.requestVideoFrameCallback(onVideoFrame);
+if ("requestVideoFrameCallback" in video) video.requestVideoFrameCallback(onVideoFrame);
 
 // Browsers that cannot run the refraction get frosted glass; say so, and
 // where to see the real thing. On iPhone and iPad every browser is Safari

@@ -35,7 +35,7 @@ html.end-dark {
 body {
   background: var(--bg);
   color: var(--fg);
-  font-family: Figtree, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: Figtree, "Figtree metrics", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: clamp(0.9875rem, 0.95rem + 0.2vw, 1.0625rem);
   line-height: 1.5;
   letter-spacing: -0.011em;
@@ -214,6 +214,22 @@ figure {
 
 /* Nordify's script face, as on nordify.io (SIL OFL, see
    public/fonts/MomoSignature-OFL.txt). */
+/* A metric-matched local stand-in: while Figtree downloads (font-display:
+   swap), the fallback renders at Figtree's line box, so the swap shifts
+   no layout. The overrides come from Figtree's own tables — upm 1000,
+   hhea ascent/descent/line-gap 950/-250/0, x-height 500 — measured
+   against Arial's x-height (1062 of 2048): size-adjust 96.42%,
+   ascent 98.53%, descent 25.93%, line-gap 0%. Liberation Sans is
+   metric-identical to Arial, so Linux gets the same box. */
+@font-face {
+  font-family: "Figtree metrics";
+  src: local("Arial"), local("Helvetica Neue"), local("Liberation Sans");
+  size-adjust: 96.42%;
+  ascent-override: 98.53%;
+  descent-override: 25.93%;
+  line-gap-override: 0%;
+}
+
 @font-face {
   font-family: "Momo Signature";
   src: url("/fonts/momo-signature.woff2") format("woff2");
@@ -372,6 +388,26 @@ pre .k {
   max-width: 38rem;
   padding-bottom: 24px;
   color: var(--fg-2);
+}
+
+/* Keyword sizes (auto) interpolate only once the root opts in; with it
+   the answer opens by growing to its own height instead of jumping.
+   Browsers without interpolate-size or ::details-content ignore both
+   declarations and keep today's instant open. */
+:root {
+  interpolate-size: allow-keywords;
+}
+
+.faq details::details-content {
+  height: 0;
+  overflow-y: hidden;
+  transition:
+    height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    content-visibility 0.35s allow-discrete;
+}
+
+.faq details[open]::details-content {
+  height: auto;
 }
 
 .faq a,
@@ -991,6 +1027,7 @@ html.end-dark .morph-switch {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .faq details::details-content,
   .rail,
   .rail *,
   .morph-switch,
