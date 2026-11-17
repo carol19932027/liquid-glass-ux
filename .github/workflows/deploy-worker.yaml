@@ -181,13 +181,36 @@ jobs:
           URL="${URL%/}"
           echo "url=${URL}" >> "$GITHUB_OUTPUT"
 
-          ROOT_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${URL}/" || true)
-          HEALTH_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${URL}/healthz" || true)
+          # A freshly created workers.dev subdomain (and the first deploy to it) can
+          # 404 for a few seconds while the edge propagates, so probe with retries
+          # instead of reporting a transient failure as the real state.
+          probe() {
+            local path="$1" body="$2" i code
+            for i in 1 2 3 4 5 6 7 8; do
+              code=$(curl -s -o "$body" -w '%{http_code}' --max-time 30 "${URL}${path}" || true)
+              code="${code:-000}"
+              echo "  probe ${path} (attempt ${i}/8) → ${code}"
+              if [ "$code" = "200" ]; then
+                echo "$code"
+                return 0
+              fi
+              if [ "$i" -lt 8 ]; then sleep 8; fi
+            done
+            echo "$code"
+          }
+
+          ROOT_CODE=$(probe "/" /tmp/cf/root.body | tee /tmp/cf/root.log | tail -n 1)
+          HEALTH_CODE=$(probe "/healthz" /tmp/cf/health.body | tee /tmp/cf/health.log | tail -n 1)
+          cat /tmp/cf/root.log /tmp/cf/health.log
           echo "root_code=${ROOT_CODE:-000}" >> "$GITHUB_OUTPUT"
           echo "health_code=${HEALTH_CODE:-000}" >> "$GITHUB_OUTPUT"
           echo "Deployed ${MODE}: ${URL} (/ → ${ROOT_CODE:-000}, /healthz → ${HEALTH_CODE:-000})"
           if [ "${ROOT_CODE:-000}" != "200" ] || [ "${HEALTH_CODE:-000}" != "200" ]; then
-            echo "::warning::Deployment reachable but unhealthy (/ → ${ROOT_CODE:-000}, /healthz → ${HEALTH_CODE:-000})"
+            echo "::warning::Deployment reachable but unhealthy after retries (/ → ${ROOT_CODE:-000}, /healthz → ${HEALTH_CODE:-000})"
+            {
+              echo "probe_body=$(head -c 400 /tmp/cf/root.body 2>/dev/null | tr '\n' ' ')"
+              echo "health_body=$(head -c 400 /tmp/cf/health.body 2>/dev/null | tr '\n' ' ')"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish deployment URL
@@ -201,13 +224,36 @@ jobs:
           URL="${{ steps.deploy.outputs.url }}"
           ROOT="${{ steps.deploy.outputs.root_code }}"
           HEALTH="${{ steps.deploy.outputs.health_code }}"
+          ROOT_BODY="${{ steps.deploy.outputs.probe_body }}"
+          HEALTH_BODY="${{ steps.deploy.outputs.health_body }}"
+          # Kept in `if` blocks on purpose: this step runs with `set -e`, and a
+          # failing `[ -n "" ] && …` AND-list would abort the step.
+          ASSETS_LINE=$(grep -Eo 'Read [0-9]+ files from the assets directory.*' /tmp/cf/deploy.txt 2>/dev/null | head -n 1 || true)
+          VERSION_LINE=$(grep -Eo '(Version|Deployment) ID: [^ ]+' /tmp/cf/deploy.txt 2>/dev/null | sort -u | tr '\n' ' ' | sed -e 's/ $//' || true)
 
           echo "::notice title=Cloudflare Worker (${MODE})::${URL}"
 
           BODY="**Cloudflare Worker deployed (${MODE}):** ${URL}
 
           - ref: \`${REF}\`
-          - verified: \`/\` → ${ROOT}, \`/healthz\` → ${HEALTH}
+          - verified: \`/\` → ${ROOT}, \`/healthz\` → ${HEALTH}"
+          if [ -n "$ASSETS_LINE" ]; then
+            BODY="${BODY}
+          - assets: ${ASSETS_LINE}"
+          fi
+          if [ -n "$VERSION_LINE" ]; then
+            BODY="${BODY}
+          - ${VERSION_LINE}"
+          fi
+          if [ -n "$ROOT_BODY" ]; then
+            BODY="${BODY}
+          - \`/\` body (first 400 bytes): \`${ROOT_BODY}\`"
+          fi
+          if [ -n "$HEALTH_BODY" ]; then
+            BODY="${BODY}
+          - \`/healthz\` body: \`${HEALTH_BODY}\`"
+          fi
+          BODY="${BODY}
           - run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           {
@@ -216,6 +262,8 @@ jobs:
             echo "- **URL:** [${URL}](${URL})"
             echo "- **Ref:** \`${REF}\`"
             echo "- **Verified:** \`/\` → ${ROOT}, \`/healthz\` → ${HEALTH}"
+            if [ -n "$ASSETS_LINE" ]; then echo "- **Assets:** ${ASSETS_LINE}"; fi
+            if [ -n "$VERSION_LINE" ]; then echo "- **${VERSION_LINE}**"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
           gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
