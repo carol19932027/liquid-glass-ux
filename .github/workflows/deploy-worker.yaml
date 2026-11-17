@@ -1,0 +1,165 @@
+name: Deploy Cloudflare Worker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Deployment mode (auto picks production on main, preview elsewhere)"
+        required: false
+        default: "auto"
+        type: choice
+        options: [auto, production, preview]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: deploy-worker-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  WORKER_NAME: liquid-glass-ux
+
+jobs:
+  deploy:
+    name: Build & deploy Worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check and build assets
+        run: npm run build
+
+      - name: Validate Worker bundle (no credentials needed)
+        run: npx wrangler deploy --dry-run
+
+      - name: Resolve deployment mode and branch slug
+        id: meta
+        run: |
+          set -euo pipefail
+          MODE="${{ inputs.mode || 'auto' }}"
+          REF="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          if [ "$MODE" = "auto" ]; then
+            if [ "$REF" = "main" ]; then MODE="production"; else MODE="preview"; fi
+          fi
+          SLUG=$(printf '%s' "$REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | cut -c1-40)
+          echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
+          echo "slug=${SLUG}" >> "$GITHUB_OUTPUT"
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+          echo "mode=${MODE} slug=${SLUG} ref=${REF}"
+
+      - name: Check Cloudflare credentials
+        id: creds
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Cloudflare credentials missing::Add the repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (Settings → Secrets and variables → Actions). Build and dry-run still verified the Worker."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to Cloudflare Workers
+        id: deploy
+        if: steps.creds.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          MODE="${{ steps.meta.outputs.mode }}"
+          SLUG="${{ steps.meta.outputs.slug }}"
+          OUT=/tmp/wrangler-out.txt
+
+          if [ "$MODE" = "production" ]; then
+            npx wrangler deploy 2>&1 | tee "$OUT"
+          else
+            # A preview alias is a version of the same Worker, so the Worker must
+            # exist first (deploy main once, or dispatch with mode=production).
+            if ! npx wrangler versions upload --preview-alias "$SLUG" 2>&1 | tee "$OUT"; then
+              echo "::error::\`wrangler versions upload\` failed — if this Worker does not exist yet, run this workflow once with mode=production (or merge to main)."
+              exit 1
+            fi
+          fi
+
+          URL=$(grep -Eo 'https://[a-zA-Z0-9.-]+\.workers\.dev[a-zA-Z0-9/._-]*' "$OUT" | head -n 1 || true)
+          if [ -z "$URL" ]; then
+            echo "::warning::Could not parse a workers.dev URL from wrangler output"
+          else
+            URL="${URL%/}"
+            echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+            # Verify the deployment through the public URL before advertising it.
+            ROOT_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${URL}/" || true)
+            HEALTH_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${URL}/healthz" || true)
+            echo "root_code=${ROOT_CODE:-000}" >> "$GITHUB_OUTPUT"
+            echo "health_code=${HEALTH_CODE:-000}" >> "$GITHUB_OUTPUT"
+            echo "Deployed ${MODE}: ${URL} (/ → ${ROOT_CODE:-000}, /healthz → ${HEALTH_CODE:-000})"
+            if [ "${ROOT_CODE:-000}" != "200" ] || [ "${HEALTH_CODE:-000}" != "200" ]; then
+              echo "::warning::Deployment reachable but unhealthy (/ → ${ROOT_CODE:-000}, /healthz → ${HEALTH_CODE:-000})"
+            fi
+          fi
+
+      - name: Publish deployment URL
+        if: steps.creds.outputs.available == 'true' && steps.deploy.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          MODE="${{ steps.meta.outputs.mode }}"
+          REF="${{ steps.meta.outputs.ref }}"
+          URL="${{ steps.deploy.outputs.url }}"
+          ROOT="${{ steps.deploy.outputs.root_code }}"
+          HEALTH="${{ steps.deploy.outputs.health_code }}"
+
+          echo "::notice title=Cloudflare Worker (${MODE})::${URL}"
+
+          BODY="**Cloudflare Worker deployed (${MODE}):** ${URL}
+
+          - ref: \`${REF}\`
+          - verified: \`/\` → ${ROOT}, \`/healthz\` → ${HEALTH}
+          - run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          {
+            echo "## Cloudflare Worker (${MODE})"
+            echo ""
+            echo "- **URL:** [${URL}](${URL})"
+            echo "- **Ref:** \`${REF}\`"
+            echo "- **Verified:** \`/\` → ${ROOT}, \`/healthz\` → ${HEALTH}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+            -f body="$BODY" >/dev/null 2>&1 || echo "::warning::could not post commit comment"
+
+          PR_NUMBER="${{ github.event.pull_request.number || '' }}"
+          if [ -z "$PR_NUMBER" ]; then
+            PR_NUMBER=$(gh pr list --head "$REF" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          fi
+          if [ -n "$PR_NUMBER" ]; then
+            PR_BODY="<!-- worker-deploy-url -->
+          ### Cloudflare Worker (${MODE})
+          - **URL:** ${URL}
+          - **Verified:** \`/\` → ${ROOT}, \`/healthz\` → ${HEALTH}
+          - **Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            EXISTING=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --jq '.[] | select(.body | contains("<!-- worker-deploy-url -->")) | .id' 2>/dev/null | head -n 1 || true)
+            if [ -n "$EXISTING" ]; then
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${EXISTING}" -f body="$PR_BODY" >/dev/null 2>&1 || true
+            else
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$PR_BODY" >/dev/null 2>&1 || true
+            fi
+          fi

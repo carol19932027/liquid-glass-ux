@@ -19,10 +19,32 @@ This is a minimal demo extracted from [nordify.io](https://nordify.io): one glas
 
 ```bash
 npm install
-npm run dev
+npm run build          # tsc + vite build -> dist/
+npm run worker:dev     # wrangler dev on http://localhost:8787
 ```
 
-Then open the URL Vite prints and scroll. The page moves under the fixed glass, the section titles appear inside it, and where the black part begins the glass switches to its dark tuning. At the end of the dark pictures it lets go and scrolls away with the page.
+Then open <http://localhost:8787> and scroll. The page moves under the fixed glass, the section titles appear inside it, and where the black part begins the glass switches to its dark tuning. At the end of the dark pictures it lets go and scrolls away with the page.
+
+`wrangler dev` serves exactly what gets deployed: the Hono Worker in `src/worker.ts` plus `dist/` through the `ASSETS` binding. Keep `npm run watch` (`vite build --watch`) running next to it so source edits are rebuilt automatically.
+
+For fast CSS/SVG tuning there is also the Vite dev server with HMR — local only, never deployed:
+
+```bash
+npm run dev            # http://localhost:5173
+```
+
+### Deploy
+
+The app ships as a Cloudflare Worker on a `workers.dev` subdomain (config in `wrangler.jsonc`):
+
+```bash
+export CLOUDFLARE_API_TOKEN=...   # template: "Edit Cloudflare Workers"
+export CLOUDFLARE_ACCOUNT_ID=...
+npm run deploy                    # production
+npm run deploy:preview my-branch  # branch preview (alias on the same Worker)
+```
+
+CI runs the same thing in `.github/workflows/deploy-worker.yaml` using the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`: pushes to `main` deploy production, other branches and pull requests publish a preview alias. Each deploy verifies `/` and `/healthz` and posts the URL as a commit/PR comment.
 
 ## Use it
 
@@ -78,7 +100,6 @@ src/glass/liquid-glass.ts  the DOM side: layers, filters, resize handling
 src/glass/liquid-glass.css the look of every layer
 src/main.ts                demo setup: dark switch, titles in the glass, parking
 src/demo.css               demo page styles
-Dockerfile, deploy/, k8s/  how the live demo is hosted (nginx on Kubernetes)
 ```
 
 ## License

@@ -8,10 +8,18 @@
     "dev": "vite",
     "check": "tsc",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "watch": "vite build --watch",
+    "preview": "vite preview",
+    "worker:dev": "wrangler dev --ip 0.0.0.0 --port 8787",
+    "deploy": "wrangler deploy",
+    "deploy:preview": "wrangler versions upload --preview-alias",
+    "guard:glass": "bash scripts/guard-glass.sh",
+    "guard:frameworks": "bash scripts/guard-frameworks.sh"
   },
   "devDependencies": {
+    "hono": "^4.13.19",
     "typescript": "~5.9",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "wrangler": "^4.163.0"
   }
 }
