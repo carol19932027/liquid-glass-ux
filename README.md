@@ -104,6 +104,13 @@ src/main.ts                demo setup: dark switch, titles in the glass, parking
 src/demo.css               demo page styles
 ```
 
+## Agent tooling
+
+Two things in this repository exist for AI coding agents, not for the app:
+
+- **Skills** live in `.agents/skills/` and are symlinked into `.claude/skills/`; `skills-lock.json` records the source repository, commit and content hash of each one. Installed with the skill's own installer, for example `npx modern-web-guidance@latest install -y --agent claude-code --agent codex --agent github-copilot --agent universal`. `modern-web-guidance` is a search tool over current web-platform best practices (`npx -y modern-web-guidance@latest search "light dismiss dialog"`).
+- **`.mcp.json`** declares the `chrome-devtools` MCP server (`npx -y chrome-devtools-mcp@latest`) for inspecting the running page. It is read by agents on your machine — it needs a local Chrome, which the CI runners and restricted sandboxes do not have.
+
 ## License
 
 Code: MIT, see [LICENSE](LICENSE). The fonts in `public/fonts/` are self-hosted and keep their own licence: Figtree and Momo Signature are both under the SIL Open Font License ([Figtree-OFL.txt](public/fonts/Figtree-OFL.txt), [MomoSignature-OFL.txt](public/fonts/MomoSignature-OFL.txt)).
