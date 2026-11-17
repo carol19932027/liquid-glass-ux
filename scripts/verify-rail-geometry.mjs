@@ -155,7 +155,7 @@ await page.screenshot({ path: shot("03-rail-label-again.png"), clip });
 // --- 3b. the liquid neck: present mid-morph, absent at rest, caps tucked ---
 // The neck is a sibling of the hosts with its own backdrop-filter, so the
 // rail and both hosts must stay filter-free, and every visible neck frame
-// must keep its 14px tuck under the cap it bridges from (bridge regime:
+// must keep its 26px tuck under the cap it bridges from (bridge regime:
 // morph.right -> tabs.left; wet-seam regime: straddling morph.right).
 const hostFiltersClean = await page.evaluate(() =>
   [".rail", ".rail-morph", ".rail-tabs"].every((s) => {
@@ -168,8 +168,13 @@ for (const [dir, fr] of [
   ["open", openFrames],
   ["close", closeFrames],
 ]) {
-  if (fr[0]?.neckVis !== "hidden" || fr.at(-1)?.neckVis !== "hidden")
-    problems.push(`neck: ${dir} resting state is not neckless`);
+  // label rest is neckless; compact rest keeps the reference's thin
+  // sticky neck, so open ends visible and close starts visible
+  const [wantStart, wantEnd] = dir === "open" ? ["hidden", "visible"] : ["visible", "hidden"];
+  if (fr[0]?.neckVis !== wantStart || fr.at(-1)?.neckVis !== wantEnd)
+    problems.push(
+      `neck: ${dir} resting states ${fr[0]?.neckVis}..${fr.at(-1)?.neckVis}, want ${wantStart}..${wantEnd}`
+    );
   const vis = fr.filter((f) => f.neckVis === "visible");
   if (!vis.length) problems.push(`neck: ${dir} never visible mid-morph`);
   // fade frames hold the last live path on purpose (melt-away), so the
@@ -182,9 +187,9 @@ for (const [dir, fr] of [
     const win = fr.slice(Math.max(0, i - 2), i + 1).map((g) => g.morphR);
     const live = f.neckMorphR >= Math.min(...win) - 0.5 && f.neckMorphR <= Math.max(...win) + 0.5;
     return !(
-      Math.abs(f.neckL - (f.neckMorphR - 14)) <= 0.2 &&
-      (Math.abs(f.neckR - (f.neckTabsL + 14)) <= 0.2 ||
-        Math.abs(f.neckR - (f.neckMorphR + 14)) <= 0.2) &&
+        Math.abs(f.neckL - (f.neckMorphR - 26)) <= 0.2 &&
+        (Math.abs(f.neckR - (f.neckTabsL + 26)) <= 0.2 ||
+          Math.abs(f.neckR - (f.neckMorphR + 26)) <= 0.2) &&
       live &&
       Math.abs(f.neckTabsL - f.tabsLeft) <= 0.2
     );

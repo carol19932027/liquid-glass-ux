@@ -413,6 +413,10 @@ const NECK_FADE = 140; // ms melt-away fade once the geometry says hide
 let neckReq = 0;
 let neckUntil = 0;
 let neckHideStart = 0;
+let neckMode: "live" | "fade" | "off" = "off";
+let neckStill = 0;
+let neckLastGap = NaN;
+let neckLastRise = NaN;
 
 const neckFrame = (now: number) => {
   neckReq = 0;
@@ -428,23 +432,36 @@ const neckFrame = (now: number) => {
   const tabVis = getComputedStyle(railTabsHost).visibility === "visible";
   // Regime 1 — metaball bridge: the caps are apart (or nearly), the waist
   // thins with the gap and pinches off exactly at the 10px resting gap.
+  // Metaball falloff on top of a RESTING waist: like the reference's
+  // separated state, the caps keep a thin sticky neck (20px) even fully
+  // apart, and it swells to full height (48px) as they meet.
   const sep = gap + 0.5 * rise;
-  const wBridge = 48 * Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.35);
-  const bridge = tabVis && wBridge > 0.75 && gap + 28 > 1;
+  const wBridge = 20 + 28 * Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.35);
+  const bridge = tabVis && gap + 52 > 1;
   // Regime 2 — wet seam: the caps overlap, so the junction is the vertical
   // seam where the morph's right cap sweeps across the tab pill. The neck
   // straddles that seam at full height — the fused liquid body — from the
   // fusion snap until the morph has swallowed the pill (or it parks).
   const straddle =
     tabVis && gap < 0 && rise > 1.5 && seamX > tl + 2 && seamX < trght - 16;
-  const show = (bridge || straddle) && (frozenCheck() || now < neckUntil);
+  // Visibility is pure geometry: the compact rest keeps its thin neck
+  // forever (the style persists after the loop parks itself).
+  const show = bridge || straddle;
+  // Rest detection: ~20 identical cap reads mean the morph has settled, so
+  // the loop can stop — the last drawn neck stays as a persisted style.
+  const settled = Math.abs(gap - neckLastGap) < 0.5 && Math.abs(rise - neckLastRise) < 0.5;
+  neckStill = settled ? neckStill + 1 : 0;
+  neckLastGap = gap;
+  neckLastRise = rise;
   if (show) {
-    const x1 = +((straddle ? seamX : mr.right - rr.left) - 14).toFixed(1);
-    const x2 = +((straddle ? seamX : tr.left - rr.left) + 14).toFixed(1);
+    // 26px tuck: the concave fillets flare wide under the caps, like the
+    // reference's deep pinch, and the seams stay hidden under their glass.
+    const x1 = +((straddle ? seamX : mr.right - rr.left) - 26).toFixed(1);
+    const x2 = +((straddle ? seamX : tr.left - rr.left) + 26).toFixed(1);
     // Viewport-space caps as written, so the verify rig can check the tuck
     // against the exact rects this frame used (its own read lags by one).
-    const x1v = +(mr.right - 14).toFixed(1);
-    const x2v = +((straddle ? mr.right : tr.left) + 14).toFixed(1);
+    const x1v = +(mr.right - 26).toFixed(1);
+    const x2v = +((straddle ? mr.right : tr.left) + 26).toFixed(1);
     const w = straddle ? 48 : wBridge;
     const yLt = 6;
     const yLb = 50;
@@ -464,25 +481,37 @@ const neckFrame = (now: number) => {
     railNeck.style.visibility = "visible";
     railNeck.style.opacity = "1";
     railNeck.dataset.phase = "live";
-    neckHideStart = 0;
+    neckMode = "live";
     railNeck.dataset.span = [x1v, x2v, mr.right.toFixed(1), tr.left.toFixed(1)].join(",");
   } else {
     // Melt-away: hold the last path and fade it out, so the thread is seen
-    // dissolving into the caps instead of blinking out in one frame.
-    if (!neckHideStart) neckHideStart = now;
-    const k = (now - neckHideStart) / NECK_FADE;
-    if (k < 1 && railNeck.style.clipPath) {
-      railNeck.style.opacity = (1 - k).toFixed(2);
-      railNeck.style.visibility = "visible";
-      railNeck.dataset.phase = "fade";
-      fading = true;
+    // dissolving into the caps instead of blinking out in one frame. Only
+    // a neck that was live this run fades — a fresh run starting from a
+    // neckless state must not resurrect the previous run's path.
+    if (neckMode === "live") {
+      neckMode = "fade";
+      neckHideStart = now;
+    }
+    if (neckMode === "fade") {
+      const k = (now - neckHideStart) / NECK_FADE;
+      if (k < 1 && railNeck.style.clipPath) {
+        railNeck.style.opacity = (1 - k).toFixed(2);
+        railNeck.style.visibility = "visible";
+        railNeck.dataset.phase = "fade";
+        fading = true;
+      } else {
+        railNeck.style.visibility = "hidden";
+        railNeck.style.opacity = "1";
+        railNeck.dataset.phase = "";
+        neckMode = "off";
+      }
     } else {
       railNeck.style.visibility = "hidden";
       railNeck.style.opacity = "1";
       railNeck.dataset.phase = "";
     }
   }
-  if (show || fading || frozenCheck() || now < neckUntil)
+  if (show || fading || frozenCheck() || (now < neckUntil && neckStill < 20))
     neckReq = requestAnimationFrame(neckFrame);
 };
 
@@ -499,5 +528,12 @@ const startNeck = () => {
   // would show as a full-rail fog rectangle — stay neckless instead.
   if (!CSS.supports("clip-path", 'path("M 0 0 L 1 0 L 1 1 Z")')) return;
   neckUntil = performance.now() + NECK_LIFE;
+  neckStill = 0;
+  neckLastGap = NaN;
+  neckLastRise = NaN;
   if (!neckReq) neckReq = requestAnimationFrame(neckFrame);
 };
+
+// The resting neck is a persisted style, so a viewport change (which moves
+// the caps) re-runs a short run to re-seat it on the live rects.
+addEventListener("resize", startNeck);
