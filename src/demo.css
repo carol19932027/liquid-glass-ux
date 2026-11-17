@@ -608,11 +608,13 @@ pre .k {
    transform ever touches a glass host, and both hosts carry min-width:
    56px so the spring can never undershoot the height and turn the width
    into the short side mid-motion (a rebake there swaps maps under a
-   moving host and flashes). The rail pins its right edge to where the
-   centred label pill's right cap sits, so the cap that becomes the round
-   button stays put and the split grows leftwards; centring the box
-   itself would slide the circle on every toggle. A transformed wrapper
-   is out of the question anyway: it would become a backdrop root.
+   moving host and flashes). The rail is an ordinary block in the document
+   flow: a constant-width box centred with auto margins, the pill flush
+   right inside it, so the cap that becomes the round button stays put
+   and the split grows leftwards. Nothing here is position: fixed — a
+   viewport-fixed glass repaints against a churning backdrop on every
+   scroll frame and blinks, and a transformed wrapper would become a
+   backdrop root anyway.
 
    Choreography, per direction:
    open  - the pill shrinks with the spring; the dot pill appears at 60ms
@@ -624,21 +626,18 @@ pre .k {
            leaves by 200ms and the label returns at 180ms. */
 .rail {
   --rail-w: 236px;
-  position: fixed;
-  bottom: clamp(16px, 3vh, 28px);
-  /* Right edge pinned where the label pill's right cap sits when centred,
-     so the cap that becomes the round button never travels: the split
-     grows leftwards from a fixed point. Centring the box instead would
-     slide the circle towards the middle on every toggle. */
-  right: calc(50% - var(--rail-w) / 2);
-  z-index: 40;
+  /* In the document flow, on the black, at the bottom: nothing about the
+     rail is fixed to the viewport, so scrolling never repaints it and the
+     backdrop under it never churns. The box keeps a constant width and
+     centres with auto margins while the pill sits flush right inside it
+     (justify-content: flex-end), so the cap that becomes the round button
+     never travels: the split grows leftwards from a fixed point. */
+  width: var(--rail-w);
+  margin: clamp(40px, 6vw, 72px) auto clamp(56px, 8vw, 96px);
   display: flex;
   align-items: center;
-  color: oklch(0.34 0.02 var(--hue));
-  transition: color 0.3s;
-}
-
-html.end-dark .rail {
+  justify-content: flex-end;
+  position: relative;
   color: oklch(0.97 0.004 var(--hue));
 }
 
@@ -715,11 +714,11 @@ html.end-dark .rail {
     visibility 0s;
 }
 
-/* Host 2: parked left of host 1, out of the layout, so the pill sits
-   centred alone while it is hidden. Visibility, not opacity — an opacity
-   below 1 on a glass host would make it a backdrop root. On the way back
-   it is absorbed early and without spring, so no glass circle is left
-   hanging next to the growing pill. */
+/* Host 2: parked left of the rail box, out of the layout, so the pill
+   sits flush right alone while it is hidden. Visibility, not opacity —
+   an opacity below 1 on a glass host would make it a backdrop root. On
+   the way back it is absorbed early and without spring, so no glass
+   circle is left hanging next to the growing pill. */
 .rail-dots {
   position: absolute;
   top: 0;
@@ -773,15 +772,9 @@ html.end-dark .rail {
 
 /* --- The morph switch -----------------------------------------------------
    The hand control for the morph: the only thing that changes data-state.
-   Sits top centre; the rail owns the bottom edge. */
+   Middle child of the navbar row, in the flow like everything else here;
+   no fixed positioning, no scroll coupling. */
 .morph-switch {
-  position: fixed;
-  top: clamp(14px, 3vh, 26px);
-  left: 0;
-  right: 0;
-  margin-inline: auto;
-  width: fit-content;
-  z-index: 40;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -789,11 +782,6 @@ html.end-dark .rail {
   cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
-  transition: color 0.3s;
-}
-
-html.end-dark .morph-switch {
-  color: oklch(0.97 0.004 var(--hue));
 }
 
 .morph-switch input {
