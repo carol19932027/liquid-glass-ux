@@ -28,3 +28,6 @@ dist
 **/.impeccable/live/deferred-svelte-component-accepts.json
 **/.impeccable/live/*.png
 # impeccable-ignore-end
+
+# local motion-verification output (screenshots, frame strips, report)
+verify-artifacts/
