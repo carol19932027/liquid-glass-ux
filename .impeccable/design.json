@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source": "DESIGN.md",
+  "captured": "2026-11-17",
+  "baseline": "ios-27-liquid-glass",
+  "palette": [
+    "--ios-label",
+    "--ios-label-2",
+    "--ios-label-3",
+    "--ios-separator",
+    "--ios-bg",
+    "--ios-bg-2",
+    "--ios-tint",
+    "--ios-tint-warm",
+    "--ios-glass-tint-clear",
+    "--ios-glass-tint-regular",
+    "--ios-glass-tint-thick"
+  ],
+  "components": [
+    { "native": "Tab bar", "element": "ios-tab-bar", "status": "shaped" },
+    { "native": "Navigation bar", "element": "ios-nav-bar", "status": "planned" },
+    { "native": "Toolbar", "element": "ios-toolbar", "status": "planned" },
+    { "native": "Button", "element": "ios-button", "status": "planned" },
+    { "native": "Segmented control", "element": "ios-segmented", "status": "planned" },
+    { "native": "Switch", "element": "ios-switch", "status": "planned" },
+    { "native": "Sheet", "element": "ios-sheet", "status": "planned" },
+    { "native": "Search bar", "element": "ios-search-bar", "status": "planned" }
+  ]
+}

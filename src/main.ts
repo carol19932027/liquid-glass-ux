@@ -364,17 +364,6 @@ const selectTab = (tab: HTMLButtonElement) => {
     other.setAttribute("aria-selected", String(on));
     other.tabIndex = on ? 0 : -1;
   }
-  placeThumb();
-};
-
-// The "segmented thumb" variant (v4) slides one shared highlight to the
-// selected tab; it reads the tab's own box, so every variant keeps the
-// hosts' geometry untouched.
-const placeThumb = () => {
-  const sel = railTabsHost.querySelector<HTMLElement>('[aria-selected="true"]');
-  if (!sel) return;
-  railTabsHost.style.setProperty("--thumb-x", `${sel.offsetLeft}px`);
-  railTabsHost.style.setProperty("--thumb-w", `${sel.offsetWidth}px`);
 };
 
 for (const [i, tab] of railTabs.entries()) {
@@ -393,24 +382,6 @@ for (const [i, tab] of railTabs.entries()) {
     railTabs[to]!.focus();
   });
 }
-
-// --- Impeccable: four navigation variants, live ------------------------------
-// A small showcase panel switches the tab bar's treatment on the live rail:
-// v1 ink pill (the study's default), v2 growing underline, v3 glass chips,
-// v4 a segmented thumb that slides between tabs. Paint-only: no variant
-// changes the hosts' boxes, so the morph geometry stays verified.
-const impeccable = document.querySelector<HTMLElement>(".impeccable")!;
-impeccable.addEventListener("click", (event) => {
-  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".impeccable-opt");
-  if (!btn?.dataset.nav) return;
-  rail.dataset.navVariant = btn.dataset.nav;
-  for (const opt of impeccable.querySelectorAll(".impeccable-opt"))
-    opt.setAttribute("aria-pressed", String(opt === btn));
-  placeThumb();
-});
-placeThumb();
-addEventListener("resize", placeThumb);
-document.fonts?.ready.then(placeThumb);
 
 railSwitch.addEventListener("change", () => {
   // rail-armed enables the reference's anticipation nudge (a keyed

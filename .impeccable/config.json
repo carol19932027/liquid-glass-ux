@@ -1,0 +1,16 @@
+{
+  "hook": {
+    "enabled": true,
+    "quiet": false
+  },
+  "detector": {
+    "designSystem": {
+      "enabled": true
+    },
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": []
+  },
+  "buildPath": "code",
+  "stalenessCheck": true
+}
