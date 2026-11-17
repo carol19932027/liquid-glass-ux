@@ -32,6 +32,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKERS_DEV_SUBDOMAIN: ${{ vars.WORKERS_DEV_SUBDOMAIN }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,56 +67,131 @@ jobs:
           echo "ref=${REF}" >> "$GITHUB_OUTPUT"
           echo "mode=${MODE} slug=${SLUG} ref=${REF}"
 
+      # Trims stray whitespace/newlines (a common cause of auth failures when a
+      # token is pasted into a secret) and publishes the values for later steps.
       - name: Check Cloudflare credentials
         id: creds
         run: |
-          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+          set -uo pipefail
+          mkdir -p /tmp/cf
+          TOKEN=$(printf '%s' "${CLOUDFLARE_API_TOKEN:-}" | tr -d '[:space:]')
+          ACCT=$(printf '%s' "${CLOUDFLARE_ACCOUNT_ID:-}" | tr -d '[:space:]')
+          if [ -z "$TOKEN" ] || [ -z "$ACCT" ]; then
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "::notice title=Cloudflare credentials missing::Add the repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (Settings → Secrets and variables → Actions). Build and dry-run still verified the Worker."
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "CLOUDFLARE_API_TOKEN=${TOKEN}"
+            echo "CLOUDFLARE_ACCOUNT_ID=${ACCT}"
+          } >> "$GITHUB_ENV"
+          echo "credentials present (account id length: ${#ACCT}, token length: ${#TOKEN})"
+
+      - name: Cloudflare pre-flight (identity and workers.dev)
+        id: preflight
+        if: steps.creds.outputs.available == 'true'
+        run: |
+          set -uo pipefail
+          echo "--- wrangler whoami ---"
+          if npx wrangler whoami > /tmp/cf/whoami.txt 2>&1; then
+            echo "whoami: OK"
+            echo "whoami_ok=true" >> "$GITHUB_OUTPUT"
           else
-            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "whoami: FAILED — the token was rejected or lacks permissions"
+            echo "whoami_ok=false" >> "$GITHUB_OUTPUT"
+            tail -n 25 /tmp/cf/whoami.txt
+          fi
+
+          if grep -q "$CLOUDFLARE_ACCOUNT_ID" /tmp/cf/whoami.txt 2>/dev/null; then
+            echo "account id is visible to this token: yes"
+          else
+            echo "::warning::CLOUDFLARE_ACCOUNT_ID does not appear in 'wrangler whoami' — the token may belong to another account, or lack Account scope"
+          fi
+
+          echo "--- workers.dev subdomain ---"
+          curl -sS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
+            > /tmp/cf/subdomain.json 2>/tmp/cf/subdomain.err || true
+          node -e '
+            const fs=require("fs");
+            let j=null;
+            try { j=JSON.parse(fs.readFileSync("/tmp/cf/subdomain.json","utf8")); } catch {}
+            if (!j) { console.log("SUBDOMAIN_STATE=unparseable"); process.exit(0); }
+            if (!j.success) {
+              console.log("SUBDOMAIN_STATE=api-error");
+              console.log("errors: " + JSON.stringify(j.errors||[]).slice(0,400));
+              process.exit(0);
+            }
+            const r=j.result||{};
+            console.log(`SUBDOMAIN_STATE=${r.enabled===true?"enabled":"disabled"}`);
+            console.log(`SUBDOMAIN_NAME=${r.subdomain||""}`);
+          ' > /tmp/cf/subdomain.txt
+          cat /tmp/cf/subdomain.txt
+          STATE=$(sed -n 's/^SUBDOMAIN_STATE=//p' /tmp/cf/subdomain.txt)
+          echo "subdomain_state=${STATE}" >> "$GITHUB_OUTPUT"
+
+          if [ "$STATE" = "disabled" ] || [ "$STATE" = "api-error" ] || [ "$STATE" = "unparseable" ]; then
+            if [ -n "${WORKERS_DEV_SUBDOMAIN:-}" ]; then
+              echo "enabling workers.dev subdomain '${WORKERS_DEV_SUBDOMAIN}'…"
+              curl -sS -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H 'Content-Type: application/json' \
+                -d "{\"subdomain\":\"${WORKERS_DEV_SUBDOMAIN}\",\"enabled\":true,\"previews_enabled\":true}" \
+                "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
+                > /tmp/cf/subdomain-set.json 2>&1 || true
+              cat /tmp/cf/subdomain-set.json
+            else
+              echo "::error::workers.dev is not usable on this account (state: ${STATE}). Enable it in the dashboard (Workers & Pages → Settings → Domains & Routes → workers.dev), or set the repository variable WORKERS_DEV_SUBDOMAIN to the name you want and re-run this workflow."
+              exit 1
+            fi
           fi
 
       - name: Deploy to Cloudflare Workers
         id: deploy
         if: steps.creds.outputs.available == 'true'
         run: |
-          set -euo pipefail
+          set -uo pipefail
           MODE="${{ steps.meta.outputs.mode }}"
           SLUG="${{ steps.meta.outputs.slug }}"
-          OUT=/tmp/wrangler-out.txt
+          OUT=/tmp/cf/deploy.txt
 
           if [ "$MODE" = "production" ]; then
             npx wrangler deploy 2>&1 | tee "$OUT"
+            RC=${PIPESTATUS[0]}
           else
             # A preview alias is a version of the same Worker, so the Worker must
             # exist first (deploy main once, or dispatch with mode=production).
-            if ! npx wrangler versions upload --preview-alias "$SLUG" 2>&1 | tee "$OUT"; then
-              echo "::error::\`wrangler versions upload\` failed — if this Worker does not exist yet, run this workflow once with mode=production (or merge to main)."
-              exit 1
+            npx wrangler versions upload --preview-alias "$SLUG" 2>&1 | tee "$OUT"
+            RC=${PIPESTATUS[0]}
+            if [ "$RC" != "0" ] && grep -qiE 'not found|does not exist|10007' "$OUT"; then
+              echo "::error::This Worker does not exist yet, so a preview alias cannot be uploaded. Run this workflow once with mode=production (or push to main) to create it."
             fi
+          fi
+
+          if [ "$RC" != "0" ]; then
+            echo "::error::wrangler ${MODE} failed (exit ${RC}) — the full output is published as a comment on this commit"
+            exit "$RC"
           fi
 
           URL=$(grep -Eo 'https://[a-zA-Z0-9.-]+\.workers\.dev[a-zA-Z0-9/._-]*' "$OUT" | head -n 1 || true)
           if [ -z "$URL" ]; then
-            echo "::warning::Could not parse a workers.dev URL from wrangler output"
-          else
-            URL="${URL%/}"
-            echo "url=${URL}" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not parse a workers.dev URL from the wrangler output"
+            exit 0
+          fi
+          URL="${URL%/}"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
 
-            # Verify the deployment through the public URL before advertising it.
-            ROOT_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${URL}/" || true)
-            HEALTH_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${URL}/healthz" || true)
-            echo "root_code=${ROOT_CODE:-000}" >> "$GITHUB_OUTPUT"
-            echo "health_code=${HEALTH_CODE:-000}" >> "$GITHUB_OUTPUT"
-            echo "Deployed ${MODE}: ${URL} (/ → ${ROOT_CODE:-000}, /healthz → ${HEALTH_CODE:-000})"
-            if [ "${ROOT_CODE:-000}" != "200" ] || [ "${HEALTH_CODE:-000}" != "200" ]; then
-              echo "::warning::Deployment reachable but unhealthy (/ → ${ROOT_CODE:-000}, /healthz → ${HEALTH_CODE:-000})"
-            fi
+          ROOT_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${URL}/" || true)
+          HEALTH_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${URL}/healthz" || true)
+          echo "root_code=${ROOT_CODE:-000}" >> "$GITHUB_OUTPUT"
+          echo "health_code=${HEALTH_CODE:-000}" >> "$GITHUB_OUTPUT"
+          echo "Deployed ${MODE}: ${URL} (/ → ${ROOT_CODE:-000}, /healthz → ${HEALTH_CODE:-000})"
+          if [ "${ROOT_CODE:-000}" != "200" ] || [ "${HEALTH_CODE:-000}" != "200" ]; then
+            echo "::warning::Deployment reachable but unhealthy (/ → ${ROOT_CODE:-000}, /healthz → ${HEALTH_CODE:-000})"
           fi
 
       - name: Publish deployment URL
-        if: steps.creds.outputs.available == 'true' && steps.deploy.outputs.url != ''
+        if: steps.deploy.outputs.url != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -163,3 +239,37 @@ jobs:
               gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$PR_BODY" >/dev/null 2>&1 || true
             fi
           fi
+
+      # Runner logs are not readable from every API client, so a failed deploy
+      # publishes its own diagnostics (redacted) as a commit comment.
+      - name: Publish failure diagnostics
+        if: failure() && steps.creds.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          REDACT="s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g"
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] && REDACT="${REDACT}; s/${CLOUDFLARE_ACCOUNT_ID}/<account-id>/g"
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && REDACT="${REDACT}; s/${CLOUDFLARE_API_TOKEN}/<token>/g"
+
+          {
+            echo "**Cloudflare Worker deploy failed** — diagnostics (run ${GITHUB_RUN_ID}, mode \`${{ steps.meta.outputs.mode }}\`):"
+            echo
+            echo '```'
+            echo "### wrangler whoami (redacted)"
+            (cat /tmp/cf/whoami.txt 2>/dev/null || echo "(missing — pre-flight did not run)") | sed -E "$REDACT" | tail -n 25
+            echo
+            echo "### workers.dev subdomain API response"
+            (cat /tmp/cf/subdomain.json 2>/dev/null || echo "(missing)") | sed -E "$REDACT" | head -c 700
+            echo
+            (cat /tmp/cf/subdomain.txt 2>/dev/null || true)
+            echo
+            echo "### wrangler output (last 60 lines)"
+            (cat /tmp/cf/deploy.txt 2>/dev/null || echo "(missing — deploy did not start)") | sed -E "$REDACT" | tail -n 60
+            echo '```'
+          } > /tmp/cf/diag.md
+
+          cat /tmp/cf/diag.md
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+            -F body=@/tmp/cf/diag.md >/dev/null 2>&1 \
+            || echo "::warning::could not post the diagnostics comment"
