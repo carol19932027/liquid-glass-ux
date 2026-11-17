@@ -598,20 +598,32 @@ pre .k {
     justify-content: center;
   }
 }
-
 /* --- The morph rail -------------------------------------------------------
    One glass pill that splits into a round button and a dot pill, in the
    vocabulary reverse-engineered from nordify.io: a single data-state
-   attribute, layout transitions (width, gap, visibility) with a spring
-   easing, staggered children, and content crossfaded as two layers in one
-   grid cell. Both glass hosts keep a 56px short side in every state, so the
+   attribute, layout transitions (width, visibility) with a spring easing,
+   staggered children, and content crossfaded as two layers in one grid
+   cell. Both glass hosts keep a 56px short side in every state, so the
    morph only re-lays tiles and never rebakes a map (HOW-IT-WORKS §8); no
-   transform ever touches a glass host. The rail centres with top, not
-   translate, because a transformed wrapper would become a backdrop root. */
+   transform ever touches a glass host. The rail centres with left/right
+   and auto margins, not translate, because a transformed wrapper would
+   become a backdrop root.
+
+   Choreography, per direction:
+   open  - the pill shrinks with the spring; the dot pill appears at 60ms
+           and stretches; its dots pop in staggered; the icon follows the
+           label out at 120ms.
+   close - the dots collapse first, the dot pill is absorbed at 300ms
+           (plain ease, no spring overshoot, visibility flips with it, so
+           no glass circle is left hanging next to the pill), the icon
+           leaves by 200ms and the label returns at 180ms. */
 .rail {
   position: fixed;
-  top: calc(50% - 28px);
-  right: clamp(16px, 3vw, 40px);
+  bottom: clamp(16px, 3vh, 28px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
   z-index: 40;
   display: flex;
   align-items: center;
@@ -634,24 +646,21 @@ html.end-dark .rail {
   width: 236px;
   color: inherit;
   text-decoration: none;
-  transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: width 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .rail[data-state="compact"] .rail-morph {
   width: 56px;
+  transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* The two faces share one grid cell; the outgoing one leaves upwards. */
+/* The two faces share one grid cell. */
 .rail-face {
   grid-area: 1 / 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition:
-    opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-    translate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
-    visibility 0s;
 }
 
 .rail-label {
@@ -659,16 +668,10 @@ html.end-dark .rail {
   font-weight: 500;
   letter-spacing: -0.01em;
   white-space: nowrap;
-}
-
-.rail-icon {
-  opacity: 0;
-  translate: 0 12px;
-  visibility: hidden;
   transition:
-    opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-    translate 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
-    visibility 0s linear 0.35s;
+    opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.18s,
+    translate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.18s,
+    visibility 0s;
 }
 
 .rail[data-state="compact"] .rail-label {
@@ -676,9 +679,19 @@ html.end-dark .rail {
   translate: 0 -12px;
   visibility: hidden;
   transition:
-    opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-    translate 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
-    visibility 0s linear 0.35s;
+    opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    translate 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    visibility 0s linear 0.2s;
+}
+
+.rail-icon {
+  opacity: 0;
+  translate: 0 12px;
+  visibility: hidden;
+  transition:
+    opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    translate 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    visibility 0s linear 0.2s;
 }
 
 .rail[data-state="compact"] .rail-icon {
@@ -691,9 +704,11 @@ html.end-dark .rail {
     visibility 0s;
 }
 
-/* Host 2: parked left of host 1, out of the layout, so the pill sits flush
-   against the viewport edge while it is hidden. Visibility, not opacity —
-   an opacity below 1 on a glass host would make it a backdrop root. */
+/* Host 2: parked left of host 1, out of the layout, so the pill sits
+   centred alone while it is hidden. Visibility, not opacity — an opacity
+   below 1 on a glass host would make it a backdrop root. On the way back
+   it is absorbed early and without spring, so no glass circle is left
+   hanging next to the growing pill. */
 .rail-dots {
   position: absolute;
   top: 0;
@@ -705,8 +720,8 @@ html.end-dark .rail {
   gap: 11px;
   visibility: hidden;
   transition:
-    width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-    visibility 0s linear 0.5s;
+    width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s linear 0.3s;
 }
 
 .rail[data-state="compact"] .rail-dots {
@@ -724,7 +739,7 @@ html.end-dark .rail {
   background: currentColor;
   scale: 0;
   transition:
-    scale 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    scale 0.2s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--i) * 25ms),
     width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
     border-radius 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -745,11 +760,15 @@ html.end-dark .rail {
 }
 
 /* --- The morph switch -----------------------------------------------------
-   The hand control for the morph: the only thing that changes data-state. */
+   The hand control for the morph: the only thing that changes data-state.
+   Sits top centre; the rail owns the bottom edge. */
 .morph-switch {
   position: fixed;
-  left: clamp(16px, 3vw, 40px);
-  bottom: clamp(16px, 3vh, 28px);
+  top: clamp(14px, 3vh, 26px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
   z-index: 40;
   display: flex;
   align-items: center;
