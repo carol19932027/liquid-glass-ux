@@ -608,11 +608,12 @@ pre .k {
    transform ever touches a glass host, and both hosts carry min-width:
    56px so the spring can never undershoot the height and turn the width
    into the short side mid-motion (a rebake there swaps maps under a
-   moving host and flashes). The rail is a constant-width box, fixed at
-   the bottom centre with its right edge pinned where the centred label
-   pill's cap sits, the pill flush right inside it (justify-content:
-   flex-end), so the cap that becomes the round button stays put and the
-   split grows leftwards. Both hosts are created with reflect: false:
+   moving host and flashes). The rail box hugs its morph host and is
+   fixed at the bottom centre with its LEFT edge pinned where the
+   centred label pill's left cap sits, so that cap — the one that
+   becomes the round GitHub button, on the left as in the reference
+   art — never travels: the dots piece peels out to the right from
+   behind the pill. Both hosts are created with reflect: false:
    the reflection layer overhangs its box on every side, and at a 10px
    gap the two overhangs overlapped — two backdrop roots filtering each
    other and invalidating one another every frame, which is what blinked
@@ -625,18 +626,19 @@ pre .k {
    open  - the pill shrinks with the spring; the dot pill appears at 60ms
            and stretches; its dots pop in staggered; the icon follows the
            label out at 120ms.
-   close - the dots collapse first, the dot pill is absorbed at 300ms
-           (plain ease, no spring overshoot, visibility flips with it, so
-           no glass circle is left hanging next to the pill), the icon
-           leaves by 200ms and the label returns at 180ms. */
+   close - the dots collapse first, the dot pill slides back under the
+           left cap with an ease-in and is gone at 220ms, its visibility
+           flip landing behind glass, the icon leaves by 160ms and the
+           label returns from 180ms. */
 .rail {
   --rail-w: 236px;
   /* Fixed again, bottom centre. The blink was never the positioning: it
      was the two reflection layers overhanging into each other (see the
-     reflect: false note in main.ts), and that is gone. The box keeps a
-     constant width and pins its right edge to where the centred label
-     pill's right cap sits, so the cap that becomes the round button
-     never travels: the split grows leftwards from a fixed point. The
+     reflect: false note in main.ts), and that is gone. The box hugs the
+     morph host and pins its left edge to where the centred label pill's
+     left cap sits, so the cap that becomes the round GitHub button
+     never travels: the dots piece peels rightwards from a fixed point,
+     and the button ends up on the left, as in the reference art. The
    ink follows the page half through the existing html.end-dark class,
    switched in ONE STEP at the boundary the way the library switches its
    own dark tuning: a colour transition would repaint the glass every
@@ -644,7 +646,7 @@ pre .k {
    §6 lists among its flickering attempts. */
   position: fixed;
   bottom: clamp(16px, 3vh, 28px);
-  right: calc(50% - var(--rail-w) / 2);
+  left: calc(50% - var(--rail-w) / 2);
   z-index: 40;
   display: flex;
   align-items: center;
@@ -738,18 +740,19 @@ html.end-dark .rail {
 }
 
 /* Host 2: the dots piece. While hidden it tucks INSIDE the pill, under
-   its right cap (right: 0, one stacking step below the morph host) —
-   not parked outside on the left, which is what made the split look
-   like a pill entering from off-screen. Switching on, the pill collapses
-   into its cap while this piece slides left out from behind it: one
-   element dividing in two. Switching off, it slides back under the cap
-   with an ease-in and the visibility flip lands behind glass, where
-   nobody sees it: two pieces merging into one. Visibility, not opacity
-   — an opacity below 1 on a glass host would make it a backdrop root. */
+   its left cap (left: 0, one stacking step below the morph host) — not
+   parked outside on the right, which is what made the split look like
+   a pill entering from off-screen. Switching on, the pill collapses
+   into its left cap while this piece slides right out from behind it:
+   one element dividing in two, round button on the left as in the
+   reference. Switching off, it slides back under the cap with an
+   ease-in and the visibility flip lands behind glass, where nobody
+   sees it: two pieces merging into one. Visibility, not opacity — an
+   opacity below 1 on a glass host would make it a backdrop root. */
 .rail-dots {
   position: absolute;
   top: 0;
-  right: 0;
+  left: 0;
   z-index: 0;
   width: 56px;
   min-width: 56px;
@@ -759,7 +762,7 @@ html.end-dark .rail {
   gap: 11px;
   visibility: hidden;
   transition:
-    right 0.22s cubic-bezier(0.4, 0, 1, 1),
+    left 0.22s cubic-bezier(0.4, 0, 1, 1),
     width 0.22s cubic-bezier(0.4, 0, 1, 1),
     visibility 0s linear 0.22s;
 }
@@ -782,11 +785,11 @@ html.end-dark .rail {
 }
 
 .rail[data-state="compact"] .rail-dots {
-  right: calc(100% + 10px);
+  left: calc(100% + 10px);
   width: 152px;
   visibility: visible;
   transition:
-    right 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.06s,
+    left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.06s,
     width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.06s,
     visibility 0s linear 0.06s;
 }
