@@ -142,9 +142,7 @@ jobs:
           # Only an explicit `enabled: false` blocks the deploy. Anything the API did
           # not report is left to `wrangler deploy`, whose error we publish verbatim —
           # guessing here previously turned a working account into a failed run.
-          if [ "$STATE" = "enabled" ]; then
-            echo "workers.dev subdomain '${NAME}' is enabled"
-          elif [ -n "${WORKERS_DEV_SUBDOMAIN:-}" ] && [ "$STATE" != "unreported" ]; then
+          enable_subdomain() {
             echo "enabling workers.dev subdomain '${WORKERS_DEV_SUBDOMAIN}'…"
             curl -sS -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               -H 'Content-Type: application/json' \
@@ -152,12 +150,41 @@ jobs:
               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
               > /tmp/cf/subdomain-set.json 2>&1 || true
             cat /tmp/cf/subdomain-set.json
-          elif [ "$STATE" = "disabled" ]; then
-            echo "::error::workers.dev is disabled on this account. Enable it in the dashboard (Workers & Pages → Settings → Domains & Routes → workers.dev), or set the repository variable WORKERS_DEV_SUBDOMAIN to the name you want and re-run this workflow."
-            exit 1
-          else
-            echo "::warning::workers.dev state could not be determined from the API (state: ${STATE}) — continuing; 'wrangler deploy' will report the authoritative error"
-          fi
+          }
+
+          case "$STATE" in
+            enabled)
+              echo "workers.dev subdomain '${NAME}' is enabled"
+              ;;
+            unreported)
+              if [ -n "$NAME" ]; then
+                # A named subdomain without an `enabled` key: the API omits the flag for
+                # tokens lacking 'Account · Account Settings · Read'. Treat it as usable
+                # instead of warning on every run.
+                echo "workers.dev subdomain '${NAME}' is usable (the API reported no 'enabled' flag)"
+                echo "::notice title=Optional token scope::Add 'Account · Account Settings · Read' to CLOUDFLARE_API_TOKEN to make the workers.dev state explicit"
+              else
+                echo "::warning::The API returned no workers.dev subdomain for this account — continuing; 'wrangler deploy' will report the authoritative error"
+              fi
+              ;;
+            disabled)
+              if [ -n "${WORKERS_DEV_SUBDOMAIN:-}" ]; then
+                enable_subdomain
+              else
+                echo "::error::workers.dev is disabled on this account. Enable it in the dashboard (Workers & Pages → Settings → Domains & Routes → workers.dev), or set the repository variable WORKERS_DEV_SUBDOMAIN to the name you want and re-run this workflow."
+                exit 1
+              fi
+              ;;
+            *)
+              # unknown / api-error / unparseable
+              if [ -n "${WORKERS_DEV_SUBDOMAIN:-}" ]; then
+                echo "::warning::workers.dev state could not be read from the API (state: ${STATE}) — trying to enable '${WORKERS_DEV_SUBDOMAIN}' from the repository variable"
+                enable_subdomain
+              else
+                echo "::warning::workers.dev state could not be determined from the API (state: ${STATE}) — continuing; 'wrangler deploy' will report the authoritative error"
+              fi
+              ;;
+          esac
 
       - name: Deploy to Cloudflare Workers
         id: deploy
