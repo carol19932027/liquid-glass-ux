@@ -251,10 +251,24 @@ new ResizeObserver(() => {
 }).observe(document.body);
 addEventListener("resize", fit);
 
+// The gradient under the glass is decoration, not information: anyone who has
+// asked the operating system to calm motion down gets the still poster instead
+// of the loop. CSS cannot stop an autoplaying <video>, so the attribute comes
+// off here, before the media is fetched, and the preference is re-read whenever
+// it changes rather than only on load.
+const video = document.querySelector("video")!;
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const syncReducedMotion = () => {
+  if (!reducedMotion.matches) return;
+  video.removeAttribute("autoplay");
+  video.pause();
+};
+syncReducedMotion();
+reducedMotion.addEventListener("change", syncReducedMotion);
+
 // The reflection reads up to 160px around the glass, but Chromium only
 // redraws it for changes under the glass itself. While the video plays near
 // it, refresh once per video frame so it does not freeze in the reflection.
-const video = document.querySelector("video")!;
 const onVideoFrame = () => {
   const v = video.getBoundingClientRect();
   const g = glass.getBoundingClientRect();
@@ -292,3 +306,77 @@ if (!supportsRefraction) {
     document.body.append(notice);
   }
 }
+
+// --- The morph rail ---------------------------------------------------------
+// Two glass hosts, one data-state. The switch is the only writer: it flips
+// the rail between the labelled pill and the split notification-button-
+// plus-tab-bar, and everything else is the CSS transition set in demo.css.
+// The pill's own href follows the state: in-page while it labels the
+// sections, back to the top once it has become the bell button.
+const rail = document.querySelector<HTMLElement>(".rail")!;
+const railMorph = document.querySelector<HTMLAnchorElement>(".rail-morph")!;
+const railSwitch = document.querySelector<HTMLInputElement>("#morph-switch")!;
+
+for (const host of document.querySelectorAll<HTMLElement>(".rail-host")) {
+  // reflect: false — the reflection layer overhangs its host by `pad` on
+  // every side, and the two rail hosts sit 10px apart, so their overhangs
+  // would overlap: two backdrop roots filtering each other's pixels,
+  // invalidating one another every frame, which blinks the glass out to
+  // near-transparent in the compact state, in any position, still or
+  // scrolling. Without the reflection layer the hosts cannot touch.
+  createLiquidGlass(host, { radius: 28, reflect: false });
+}
+
+const RAIL_STATES = {
+  label: { href: "#accurate", label: "Browse the sections" },
+  compact: { href: "#top", label: "Notifications" },
+} as const;
+
+const setRailState = (compact: boolean) => {
+  rail.dataset.state = compact ? "compact" : "label";
+  const state = compact ? RAIL_STATES.compact : RAIL_STATES.label;
+  railMorph.href = state.href;
+  railMorph.setAttribute("aria-label", state.label);
+};
+
+// The tab bar: three tabs in an RTL island, the selected one wears the ink
+// pill. Selection moves with click and arrow keys (in RTL, ArrowLeft is
+// "forward"), roving tabindex per the tabs pattern; this demo has no tab
+// panels, so the state is purely the rail's own.
+const railTabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".rail-tab"));
+
+const selectTab = (tab: HTMLButtonElement) => {
+  for (const other of railTabs) {
+    const on = other === tab;
+    other.setAttribute("aria-selected", String(on));
+    other.tabIndex = on ? 0 : -1;
+  }
+};
+
+for (const [i, tab] of railTabs.entries()) {
+  tab.addEventListener("click", () => selectTab(tab));
+  tab.addEventListener("keydown", (event) => {
+    const last = railTabs.length - 1;
+    const to =
+      event.key === "ArrowLeft" ? Math.min(i + 1, last)
+      : event.key === "ArrowRight" ? Math.max(i - 1, 0)
+      : event.key === "Home" ? 0
+      : event.key === "End" ? last
+      : -1;
+    if (to < 0) return;
+    event.preventDefault();
+    selectTab(railTabs[to]!);
+    railTabs[to]!.focus();
+  });
+}
+
+railSwitch.addEventListener("change", () => {
+  // rail-armed enables the reference's anticipation nudge (a keyed
+  // animation on the morph host, translate out to 25px/20px at 28% of a
+  // .62s run and a pop-spring return). It is armed on the first switch
+  // flip only, so the rail never nudges on load, when the state is
+  // written once to match the switch's initial position.
+  rail.classList.add("rail-armed");
+  setRailState(railSwitch.checked);
+});
+setRailState(railSwitch.checked);

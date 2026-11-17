@@ -13,3 +13,10 @@ typescript
 hono
 wrangler
 @cloudflare/workers-types
+
+# --- verification tooling, approved by the user in chat on 2026-11-17 ---
+# playwright-core drives the headless browser; @sparticuz/chromium ships the
+# browser binary inside its npm tarball (the sandbox cannot reach the
+# playwright CDN), plus the al2023 NSS libs it needs on plain Debian.
+playwright-core
+@sparticuz/chromium

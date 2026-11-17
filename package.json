@@ -14,10 +14,14 @@
     "deploy": "wrangler deploy",
     "deploy:preview": "wrangler versions upload --preview-alias",
     "guard:glass": "bash scripts/guard-glass.sh",
-    "guard:frameworks": "bash scripts/guard-frameworks.sh"
+    "guard:frameworks": "bash scripts/guard-frameworks.sh",
+    "verify:rail": "node scripts/verify-rail-geometry.mjs",
+    "verify:rail:frames": "node scripts/verify-rail-frames.mjs"
   },
   "devDependencies": {
+    "@sparticuz/chromium": "^153.0.0",
     "hono": "^4.13.19",
+    "playwright-core": "^1.65.1",
     "typescript": "~5.9",
     "vite": "^8.3.5",
     "wrangler": "^4.163.0"
