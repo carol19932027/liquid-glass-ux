@@ -598,3 +598,226 @@ pre .k {
     justify-content: center;
   }
 }
+
+/* --- The morph rail -------------------------------------------------------
+   One glass pill that splits into a round button and a dot pill, in the
+   vocabulary reverse-engineered from nordify.io: a single data-state
+   attribute, layout transitions (width, gap, visibility) with a spring
+   easing, staggered children, and content crossfaded as two layers in one
+   grid cell. Both glass hosts keep a 56px short side in every state, so the
+   morph only re-lays tiles and never rebakes a map (HOW-IT-WORKS §8); no
+   transform ever touches a glass host. The rail centres with top, not
+   translate, because a transformed wrapper would become a backdrop root. */
+.rail {
+  position: fixed;
+  top: calc(50% - 28px);
+  right: clamp(16px, 3vw, 40px);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  color: oklch(0.34 0.02 var(--hue));
+  transition: color 0.3s;
+}
+
+html.end-dark .rail {
+  color: oklch(0.97 0.004 var(--hue));
+}
+
+.rail-host {
+  height: 56px;
+  position: relative;
+}
+
+/* Host 1: the labelled pill, and the round button once split. */
+.rail-morph {
+  display: grid;
+  width: 236px;
+  color: inherit;
+  text-decoration: none;
+  transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.rail[data-state="compact"] .rail-morph {
+  width: 56px;
+}
+
+/* The two faces share one grid cell; the outgoing one leaves upwards. */
+.rail-face {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition:
+    opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    translate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    visibility 0s;
+}
+
+.rail-label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.rail-icon {
+  opacity: 0;
+  translate: 0 12px;
+  visibility: hidden;
+  transition:
+    opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    translate 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+    visibility 0s linear 0.35s;
+}
+
+.rail[data-state="compact"] .rail-label {
+  opacity: 0;
+  translate: 0 -12px;
+  visibility: hidden;
+  transition:
+    opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    translate 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+    visibility 0s linear 0.35s;
+}
+
+.rail[data-state="compact"] .rail-icon {
+  opacity: 1;
+  translate: 0 0;
+  visibility: visible;
+  transition:
+    opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.12s,
+    translate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s,
+    visibility 0s;
+}
+
+/* Host 2: parked left of host 1, out of the layout, so the pill sits flush
+   against the viewport edge while it is hidden. Visibility, not opacity —
+   an opacity below 1 on a glass host would make it a backdrop root. */
+.rail-dots {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 10px);
+  width: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  visibility: hidden;
+  transition:
+    width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    visibility 0s linear 0.5s;
+}
+
+.rail[data-state="compact"] .rail-dots {
+  width: 152px;
+  visibility: visible;
+  transition:
+    width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.06s,
+    visibility 0s linear 0.06s;
+}
+
+.rail-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  scale: 0;
+  transition:
+    scale 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-radius 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.rail[data-state="compact"] .rail-dot {
+  scale: 1;
+  transition:
+    scale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.14s + var(--i) * 55ms),
+    width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-radius 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* The stretch from the reference: a dot grows into a bar under the pointer. */
+.rail-dot:hover,
+.rail-dot:focus-visible {
+  width: 26px;
+  border-radius: 4px;
+}
+
+/* --- The morph switch -----------------------------------------------------
+   The hand control for the morph: the only thing that changes data-state. */
+.morph-switch {
+  position: fixed;
+  left: clamp(16px, 3vw, 40px);
+  bottom: clamp(16px, 3vh, 28px);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: oklch(0.34 0.02 var(--hue));
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: color 0.3s;
+}
+
+html.end-dark .morph-switch {
+  color: oklch(0.97 0.004 var(--hue));
+}
+
+.morph-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  clip-path: inset(50%);
+}
+
+.morph-switch-track {
+  width: 46px;
+  height: 27px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, currentColor 12%, transparent);
+  border: 1px solid color-mix(in oklab, currentColor 26%, transparent);
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  transition: background-color 0.3s;
+}
+
+.morph-switch-knob {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: currentColor;
+  transition: translate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.morph-switch input:checked + .morph-switch-track {
+  background: color-mix(in oklab, currentColor 22%, transparent);
+}
+
+.morph-switch input:checked + .morph-switch-track .morph-switch-knob {
+  translate: 19px 0;
+}
+
+.morph-switch input:focus-visible + .morph-switch-track {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.morph-switch-text {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .rail *,
+  .morph-switch,
+  .morph-switch * {
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+}

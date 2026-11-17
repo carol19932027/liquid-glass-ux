@@ -306,3 +306,43 @@ if (!supportsRefraction) {
     document.body.append(notice);
   }
 }
+
+// --- The morph rail ---------------------------------------------------------
+// Two glass hosts, one data-state. The switch is the only writer: it flips
+// the rail between the labelled pill and the split round-button-plus-dots,
+// and everything else is the CSS transition set in demo.css. The pill's own
+// href follows the state: in-page while it labels the sections, the
+// repository once it has become the round button.
+const rail = document.querySelector<HTMLElement>(".rail")!;
+const railMorph = document.querySelector<HTMLAnchorElement>(".rail-morph")!;
+const railSwitch = document.querySelector<HTMLInputElement>("#morph-switch")!;
+
+for (const host of document.querySelectorAll<HTMLElement>(".rail-host")) {
+  createLiquidGlass(host, { radius: 28 });
+}
+
+const RAIL_STATES = {
+  label: { href: "#accurate", label: "Browse the sections", external: false },
+  compact: {
+    href: "https://github.com/nordify/css-liquid-glass",
+    label: "The repository on GitHub",
+    external: true,
+  },
+} as const;
+
+const setRailState = (compact: boolean) => {
+  rail.dataset.state = compact ? "compact" : "label";
+  const state = compact ? RAIL_STATES.compact : RAIL_STATES.label;
+  railMorph.href = state.href;
+  railMorph.setAttribute("aria-label", state.label);
+  if (state.external) {
+    railMorph.target = "_blank";
+    railMorph.rel = "noopener";
+  } else {
+    railMorph.removeAttribute("target");
+    railMorph.removeAttribute("rel");
+  }
+};
+
+railSwitch.addEventListener("change", () => setRailState(railSwitch.checked));
+setRailState(railSwitch.checked);
