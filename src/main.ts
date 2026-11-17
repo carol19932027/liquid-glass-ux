@@ -251,10 +251,24 @@ new ResizeObserver(() => {
 }).observe(document.body);
 addEventListener("resize", fit);
 
+// The gradient under the glass is decoration, not information: anyone who has
+// asked the operating system to calm motion down gets the still poster instead
+// of the loop. CSS cannot stop an autoplaying <video>, so the attribute comes
+// off here, before the media is fetched, and the preference is re-read whenever
+// it changes rather than only on load.
+const video = document.querySelector("video")!;
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const syncReducedMotion = () => {
+  if (!reducedMotion.matches) return;
+  video.removeAttribute("autoplay");
+  video.pause();
+};
+syncReducedMotion();
+reducedMotion.addEventListener("change", syncReducedMotion);
+
 // The reflection reads up to 160px around the glass, but Chromium only
 // redraws it for changes under the glass itself. While the video plays near
 // it, refresh once per video frame so it does not freeze in the reflection.
-const video = document.querySelector("video")!;
 const onVideoFrame = () => {
   const v = video.getBoundingClientRect();
   const g = glass.getBoundingClientRect();
