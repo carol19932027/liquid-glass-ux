@@ -98,7 +98,9 @@ stretches and pinches off — without breaking the refraction library?
 ## 6. Design decisions (asked 2026-11-17, answered by the user)
 
 1. **Neck material** — *real glass*: the neck carries its own
-   `backdrop-filter: blur(2px) saturate(1.1)` plus a 10% currentColor tint.
+   `backdrop-filter: blur(3px) saturate(1.3)` plus an 18% currentColor tint
+   (raised from 2px/10% after a real-display pass found the first recipe
+   too subtle to read in a ~200ms window).
    It is a third backdrop root, but only while the morph runs, and it
    contains no glass host — the one place a filter may live this close to
    the rail. Blink re-checked headlessly (`hostFiltersClean` in the rig);
@@ -121,9 +123,16 @@ verify rig, or while the neck is visible. Every frame it reads the live cap
 rects and works in two regimes:
 
 - **Metaball bridge** — caps apart or nearly: waist
-  `w = 44·min(1, max(0, 1 − sep/10))^1.6` with `sep = gap + rise/2`, so the
+  `w = 48·min(1, max(0, 1 − sep/10))^1.35` with `sep = gap + rise/2`, so the
   waist pinches to zero exactly at the 10px resting gap; the path tucks
   14px under each cap so the seams hide under their glass.
+- **Melt-away** — once the geometry says hide, the last path is held and
+  faded over 140ms (opacity on the neck only — a sibling, never a host), so
+  the thread is seen dissolving into the caps instead of blinking out.
+- **Support guard** — `startNeck` returns early unless
+  `CSS.supports("clip-path", path(...))`; without clip-path the neck would
+  paint as a full-rail fog rectangle, so unsupported browsers keep today's
+  morph exactly.
 - **Wet seam** — caps overlapping: the junction is the vertical seam where
   the morph's right cap sweeps across the tab pill, so the neck straddles
   `morph.right ± 14` at full height (the fused liquid body) from the fusion
@@ -139,9 +148,15 @@ visibility + the caps the driver used (`data-span`), asserting the neck is
 hidden in the first/last frames of each direction, visible mid-morph, its
 14px tuck exact, its rects live (within a 3-frame window of the recorder's
 own reads), the rail and both hosts free of `filter`/`backdrop-filter`, and
-the neck never visible under `prefers-reduced-motion`. Latest run: open 13
-visible frames, close 6, `problems: []`, `ghostAbsoluteErrorPixels: 0`,
+the neck never visible under `prefers-reduced-motion`. Latest run: open 22
+visible frames, close 15, `problems: []`, `ghostAbsoluteErrorPixels: 0`,
 tabsLeft 625 constant, cover drift 0.
+
+Reading the effect on the live site: the neck exists only *inside* the
+morph — flip the "Morph" switch in the page header (next to the logo) and
+watch the seam between the bell and the tab pill; both resting states are
+deliberately neckless, so a page that is merely loaded or hovered never
+shows it.
 
 ## References
 

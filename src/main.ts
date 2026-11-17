@@ -409,11 +409,14 @@ setRailState(railSwitch.checked);
 const railNeck = document.querySelector<HTMLElement>(".rail-neck")!;
 const NECK_SEP = 10; // cap gap (+ half the rise) that eats the waist whole
 const NECK_LIFE = 1200; // ms a neck run may live after a flip
+const NECK_FADE = 140; // ms melt-away fade once the geometry says hide
 let neckReq = 0;
 let neckUntil = 0;
+let neckHideStart = 0;
 
 const neckFrame = (now: number) => {
   neckReq = 0;
+  let fading = false;
   const rr = rail.getBoundingClientRect();
   const mr = railMorph.getBoundingClientRect();
   const tr = railTabsHost.getBoundingClientRect();
@@ -426,7 +429,7 @@ const neckFrame = (now: number) => {
   // Regime 1 — metaball bridge: the caps are apart (or nearly), the waist
   // thins with the gap and pinches off exactly at the 10px resting gap.
   const sep = gap + 0.5 * rise;
-  const wBridge = 44 * Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.6);
+  const wBridge = 48 * Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.35);
   const bridge = tabVis && wBridge > 0.75 && gap + 28 > 1;
   // Regime 2 — wet seam: the caps overlap, so the junction is the vertical
   // seam where the morph's right cap sweeps across the tab pill. The neck
@@ -442,7 +445,7 @@ const neckFrame = (now: number) => {
     // against the exact rects this frame used (its own read lags by one).
     const x1v = +(mr.right - 14).toFixed(1);
     const x2v = +((straddle ? mr.right : tr.left) + 14).toFixed(1);
-    const w = straddle ? 44 : wBridge;
+    const w = straddle ? 48 : wBridge;
     const yLt = 6;
     const yLb = 50;
     const yRt = +(rise + 6).toFixed(1);
@@ -459,11 +462,28 @@ const neckFrame = (now: number) => {
       `C ${q(mx)} ${q(yLb + (yB - yLb) / 2)}, ${q(x1 + (mx - x1) / 2)} ${yLb}, ${x1} ${yLb} Z`;
     railNeck.style.clipPath = `path("${d}")`;
     railNeck.style.visibility = "visible";
+    railNeck.style.opacity = "1";
+    railNeck.dataset.phase = "live";
+    neckHideStart = 0;
     railNeck.dataset.span = [x1v, x2v, mr.right.toFixed(1), tr.left.toFixed(1)].join(",");
   } else {
-    railNeck.style.visibility = "hidden";
+    // Melt-away: hold the last path and fade it out, so the thread is seen
+    // dissolving into the caps instead of blinking out in one frame.
+    if (!neckHideStart) neckHideStart = now;
+    const k = (now - neckHideStart) / NECK_FADE;
+    if (k < 1 && railNeck.style.clipPath) {
+      railNeck.style.opacity = (1 - k).toFixed(2);
+      railNeck.style.visibility = "visible";
+      railNeck.dataset.phase = "fade";
+      fading = true;
+    } else {
+      railNeck.style.visibility = "hidden";
+      railNeck.style.opacity = "1";
+      railNeck.dataset.phase = "";
+    }
   }
-  if (show || frozenCheck() || now < neckUntil) neckReq = requestAnimationFrame(neckFrame);
+  if (show || fading || frozenCheck() || now < neckUntil)
+    neckReq = requestAnimationFrame(neckFrame);
 };
 
 // The verification rig freezes animations; a frozen morph must keep its
@@ -475,6 +495,9 @@ const frozenCheck = () =>
 
 const startNeck = () => {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  // clip-path: path() is the neck's only paint; without it the element
+  // would show as a full-rail fog rectangle — stay neckless instead.
+  if (!CSS.supports("clip-path", 'path("M 0 0 L 1 0 L 1 1 Z")')) return;
   neckUntil = performance.now() + NECK_LIFE;
   if (!neckReq) neckReq = requestAnimationFrame(neckFrame);
 };

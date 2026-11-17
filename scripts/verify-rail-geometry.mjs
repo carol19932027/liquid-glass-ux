@@ -119,6 +119,7 @@ const startRecorder = () =>
         morphW: +rm.width.toFixed(1),
         morphR: +rm.right.toFixed(1),
         neckVis: getComputedStyle(neck).visibility,
+        neckPhase: neck.dataset.phase || "",
         // as written by the driver: neck caps + the rects that frame used
         neckL: sp.length === 4 ? sp[0] : null,
         neckR: sp.length === 4 ? sp[1] : null,
@@ -171,7 +172,9 @@ for (const [dir, fr] of [
     problems.push(`neck: ${dir} resting state is not neckless`);
   const vis = fr.filter((f) => f.neckVis === "visible");
   if (!vis.length) problems.push(`neck: ${dir} never visible mid-morph`);
-  const bad = vis.filter((f) => {
+  // fade frames hold the last live path on purpose (melt-away), so the
+  // tuck/liveness math only applies while the driver writes fresh rects
+  const bad = vis.filter((f) => f.neckPhase === "live").filter((f) => {
     const i = fr.indexOf(f);
     // the driver's rects may lag this recorder by one rAF tick (software
     // rasterizers stretch a tick to ~60ms), so accept any morph edge the
@@ -227,6 +230,7 @@ const analyze = (frames) => {
     visStart: frames[0]?.tabsVis,
     visEnd: frames.at(-1)?.tabsVis,
     neckVisibleFrames: frames.filter((f) => f.neckVis === "visible").length,
+    neckFadeFrames: frames.filter((f) => f.neckPhase === "fade").length,
     neckAtStart: frames[0]?.neckVis,
     neckAtEnd: frames.at(-1)?.neckVis,
   };
