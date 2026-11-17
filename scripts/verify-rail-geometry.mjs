@@ -100,11 +100,13 @@ const startRecorder = () =>
     const tabs = document.querySelector(".rail-tabs");
     const cover = document.querySelector(".rail-tabs + .lg-cover");
     const morph = document.querySelector(".rail-morph");
+    const neck = document.querySelector(".rail-neck");
     window.__rec = { t0: performance.now(), frames: [] };
     const tick = () => {
       const rt = tabs.getBoundingClientRect();
       const rc = cover.getBoundingClientRect();
       const rm = morph.getBoundingClientRect();
+      const sp = (neck.dataset.span || "").split(",").map(Number);
       window.__rec.frames.push({
         t: +(performance.now() - window.__rec.t0).toFixed(1),
         tabsLeft: +rt.left.toFixed(1),
@@ -115,6 +117,13 @@ const startRecorder = () =>
         coverW: +rc.width.toFixed(1),
         tabsVis: getComputedStyle(tabs).visibility,
         morphW: +rm.width.toFixed(1),
+        morphR: +rm.right.toFixed(1),
+        neckVis: getComputedStyle(neck).visibility,
+        // as written by the driver: neck caps + the rects that frame used
+        neckL: sp.length === 4 ? sp[0] : null,
+        neckR: sp.length === 4 ? sp[1] : null,
+        neckMorphR: sp.length === 4 ? sp[2] : null,
+        neckTabsL: sp.length === 4 ? sp[3] : null,
       });
       if (performance.now() - window.__rec.t0 < 2200) requestAnimationFrame(tick);
     };
@@ -142,6 +151,58 @@ await page.waitForTimeout(1400);
 const closeFrames = await collect();
 await page.screenshot({ path: shot("03-rail-label-again.png"), clip });
 
+// --- 3b. the liquid neck: present mid-morph, absent at rest, caps tucked ---
+// The neck is a sibling of the hosts with its own backdrop-filter, so the
+// rail and both hosts must stay filter-free, and every visible neck frame
+// must keep its 14px tuck under the cap it bridges from (bridge regime:
+// morph.right -> tabs.left; wet-seam regime: straddling morph.right).
+const hostFiltersClean = await page.evaluate(() =>
+  [".rail", ".rail-morph", ".rail-tabs"].every((s) => {
+    const c = getComputedStyle(document.querySelector(s));
+    return c.filter === "none" && (c.backdropFilter === "none" || c.backdropFilter === "");
+  })
+);
+if (!hostFiltersClean) problems.push("neck: filter/backdrop-filter on rail or a host");
+for (const [dir, fr] of [
+  ["open", openFrames],
+  ["close", closeFrames],
+]) {
+  if (fr[0]?.neckVis !== "hidden" || fr.at(-1)?.neckVis !== "hidden")
+    problems.push(`neck: ${dir} resting state is not neckless`);
+  const vis = fr.filter((f) => f.neckVis === "visible");
+  if (!vis.length) problems.push(`neck: ${dir} never visible mid-morph`);
+  const bad = vis.filter((f) => {
+    const i = fr.indexOf(f);
+    // the driver's rects may lag this recorder by one rAF tick (software
+    // rasterizers stretch a tick to ~60ms), so accept any morph edge the
+    // rail actually had within the last three frames
+    const win = fr.slice(Math.max(0, i - 2), i + 1).map((g) => g.morphR);
+    const live = f.neckMorphR >= Math.min(...win) - 0.5 && f.neckMorphR <= Math.max(...win) + 0.5;
+    return !(
+      Math.abs(f.neckL - (f.neckMorphR - 14)) <= 0.2 &&
+      (Math.abs(f.neckR - (f.neckTabsL + 14)) <= 0.2 ||
+        Math.abs(f.neckR - (f.neckMorphR + 14)) <= 0.2) &&
+      live &&
+      Math.abs(f.neckTabsL - f.tabsLeft) <= 0.2
+    );
+  });
+  if (bad.length)
+    problems.push(
+      `neck: ${dir} cap tuck off in ${bad.length} frames, e.g. ${JSON.stringify(bad[0])}`
+    );
+}
+
+// --- 3c. reduced motion: the neck loop must never run ----------------------
+await page.emulateMedia({ reducedMotion: "reduce" });
+await startRecorder();
+await page.click(".morph-switch");
+await page.waitForTimeout(700);
+const prmFrames = await collect();
+await page.emulateMedia({ reducedMotion: null });
+await page.waitForTimeout(900);
+if (prmFrames.some((f) => f.neckVis === "visible"))
+  problems.push("neck: visible under prefers-reduced-motion");
+
 // --- 4. ghost diff: state 3 must be pixel-identical to state 1 ------------
 const ghostAE = pixelDiff(shot("01-rail-label.png"), shot("03-rail-label-again.png"), shot("ghost-diff.png"));
 
@@ -165,6 +226,9 @@ const analyze = (frames) => {
     tabsTopMax: Math.max(...frames.map((f) => f.tabsTop)),
     visStart: frames[0]?.tabsVis,
     visEnd: frames.at(-1)?.tabsVis,
+    neckVisibleFrames: frames.filter((f) => f.neckVis === "visible").length,
+    neckAtStart: frames[0]?.neckVis,
+    neckAtEnd: frames.at(-1)?.neckVis,
   };
 };
 
@@ -175,6 +239,7 @@ const result = {
   railBox,
   fontProbe,
   ghostAbsoluteErrorPixels: ghostAE,
+  hostFiltersClean,
   open: analyze(openFrames),
   close: analyze(closeFrames),
   openFrameSample: openFrames.filter((_, i) => i % 6 === 0),

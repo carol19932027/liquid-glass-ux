@@ -683,6 +683,23 @@ html.end-dark .rail {
   position: relative;
 }
 
+/* The liquid neck: clipped to a catenoid path per frame by main.ts while
+   the morph runs, hidden otherwise, so both resting states stay pixel-
+   identical to a neckless rail. It carries its own backdrop-filter —
+   legal because it CONTAINS no glass host (the pitfalls list forbids
+   filters on their ancestors, not on siblings) — plus an ink tint that
+   follows the one-step html.end-dark switch like everything else here. */
+.rail-neck {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  visibility: hidden;
+  background: color-mix(in oklab, currentColor 10%, transparent);
+  -webkit-backdrop-filter: blur(2px) saturate(1.1);
+  backdrop-filter: blur(2px) saturate(1.1);
+}
+
 /* Host 1: the labelled pill, and the bell button once split. The
    reference's spring on width, plus its anticipation nudge keyed to the
    state class; .rail-armed (set on the first switch) keeps the rail

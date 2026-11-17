@@ -326,6 +326,7 @@ if (!supportsRefraction) {
 // The pill's own href follows the state: in-page while it labels the
 // sections, back to the top once it has become the bell button.
 const rail = document.querySelector<HTMLElement>(".rail")!;
+const railTabsHost = document.querySelector<HTMLElement>(".rail-tabs")!;
 const railMorph = document.querySelector<HTMLAnchorElement>(".rail-morph")!;
 const railSwitch = document.querySelector<HTMLInputElement>("#morph-switch")!;
 
@@ -390,5 +391,90 @@ railSwitch.addEventListener("change", () => {
   // written once to match the switch's initial position.
   rail.classList.add("rail-armed");
   setRailState(railSwitch.checked);
+  startNeck();
 });
 setRailState(railSwitch.checked);
+
+// --- The liquid neck ---------------------------------------------------------
+// A gooey bridge between the bell's right cap and the tab pill's left cap
+// (see docs/gooey-morph-research.md). It is a sibling of the hosts, never
+// an ancestor, clipped to a catenoid path and carrying its own backdrop-
+// filter — a backdrop root that contains no glass, which is the only place
+// a filter may live this close to the rail. The path is rewritten per frame
+// from the LIVE cap rects while the morph runs, so it stays in phase with
+// the width spring, the 24px rise and the nudge without a parallel clock:
+// the waist thins as the caps separate (metaball falloff) and pinches off
+// exactly at the 10px resting gap, so both resting states stay neckless
+// and pixel-identical. On the merge it swells back until the caps meet.
+const railNeck = document.querySelector<HTMLElement>(".rail-neck")!;
+const NECK_SEP = 10; // cap gap (+ half the rise) that eats the waist whole
+const NECK_LIFE = 1200; // ms a neck run may live after a flip
+let neckReq = 0;
+let neckUntil = 0;
+
+const neckFrame = (now: number) => {
+  neckReq = 0;
+  const rr = rail.getBoundingClientRect();
+  const mr = railMorph.getBoundingClientRect();
+  const tr = railTabsHost.getBoundingClientRect();
+  const gap = tr.left - mr.right; // <0 while the caps still overlap
+  const rise = tr.top - rr.top; // 0 in the slot, ~24 parked below
+  const tl = tr.left - rr.left;
+  const trght = tr.right - rr.left;
+  const seamX = mr.right - rr.left; // morph's right cap, rail space
+  const tabVis = getComputedStyle(railTabsHost).visibility === "visible";
+  // Regime 1 — metaball bridge: the caps are apart (or nearly), the waist
+  // thins with the gap and pinches off exactly at the 10px resting gap.
+  const sep = gap + 0.5 * rise;
+  const wBridge = 44 * Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.6);
+  const bridge = tabVis && wBridge > 0.75 && gap + 28 > 1;
+  // Regime 2 — wet seam: the caps overlap, so the junction is the vertical
+  // seam where the morph's right cap sweeps across the tab pill. The neck
+  // straddles that seam at full height — the fused liquid body — from the
+  // fusion snap until the morph has swallowed the pill (or it parks).
+  const straddle =
+    tabVis && gap < 0 && rise > 1.5 && seamX > tl + 2 && seamX < trght - 16;
+  const show = (bridge || straddle) && (frozenCheck() || now < neckUntil);
+  if (show) {
+    const x1 = +((straddle ? seamX : mr.right - rr.left) - 14).toFixed(1);
+    const x2 = +((straddle ? seamX : tr.left - rr.left) + 14).toFixed(1);
+    // Viewport-space caps as written, so the verify rig can check the tuck
+    // against the exact rects this frame used (its own read lags by one).
+    const x1v = +(mr.right - 14).toFixed(1);
+    const x2v = +((straddle ? mr.right : tr.left) + 14).toFixed(1);
+    const w = straddle ? 44 : wBridge;
+    const yLt = 6;
+    const yLb = 50;
+    const yRt = +(rise + 6).toFixed(1);
+    const yRb = +(rise + 50).toFixed(1);
+    const mx = (x1 + x2) / 2;
+    const yc = 28 + rise / 2;
+    const yT = +(yc - w / 2).toFixed(1);
+    const yB = +(yc + w / 2).toFixed(1);
+    const q = (n: number) => +n.toFixed(1);
+    const d =
+      `M ${x1} ${yLt} C ${q(x1 + (mx - x1) / 2)} ${yLt}, ${q(mx)} ${q(yLt + (yT - yLt) / 2)}, ${q(mx)} ${yT} ` +
+      `C ${q(mx)} ${q(yRt + (yT - yRt) / 2)}, ${q(x2 - (x2 - mx) / 2)} ${yRt}, ${x2} ${yRt} ` +
+      `L ${x2} ${yRb} C ${q(x2 - (x2 - mx) / 2)} ${yRb}, ${q(mx)} ${q(yRb + (yB - yRb) / 2)}, ${q(mx)} ${yB} ` +
+      `C ${q(mx)} ${q(yLb + (yB - yLb) / 2)}, ${q(x1 + (mx - x1) / 2)} ${yLb}, ${x1} ${yLb} Z`;
+    railNeck.style.clipPath = `path("${d}")`;
+    railNeck.style.visibility = "visible";
+    railNeck.dataset.span = [x1v, x2v, mr.right.toFixed(1), tr.left.toFixed(1)].join(",");
+  } else {
+    railNeck.style.visibility = "hidden";
+  }
+  if (show || frozenCheck() || now < neckUntil) neckReq = requestAnimationFrame(neckFrame);
+};
+
+// The verification rig freezes animations; a frozen morph must keep its
+// neck instead of letting the run expire mid-capture.
+const frozenCheck = () =>
+  document
+    .getAnimations()
+    .some((a) => a.playState === "paused" && a.timeline === document.timeline);
+
+const startNeck = () => {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  neckUntil = performance.now() + NECK_LIFE;
+  if (!neckReq) neckReq = requestAnimationFrame(neckFrame);
+};
