@@ -216,6 +216,12 @@ createLiquidGlass(element, { radius: 30 });</code></pre>
          (will-change: transform), which makes it a backdrop root — a fixed
          glass inside it would lose the page canvas from its backdrop. -->
     <nav class="rail" data-state="label" aria-label="Navigation">
+      <!-- The liquid neck: a gooey bridge between the bell's right cap and
+           the tab pill's left cap, painted UNDER both hosts so its seams
+           hide under their glass. A plain div clipped to a catenoid path
+           with its own backdrop-filter — a backdrop root that contains no
+           glass host, the only place a filter may live near the rail. -->
+      <div class="rail-neck" aria-hidden="true"></div>
       <a class="rail-host rail-morph" href="#accurate" aria-label="Browse the sections" data-lg-dark>
         <!-- The label pops in per character, like the reference's ctaChar
              spans: --c is the stagger index, the arrow taking the last. -->
