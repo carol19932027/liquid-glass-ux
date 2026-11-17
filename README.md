@@ -44,7 +44,9 @@ npm run deploy                    # production
 npm run deploy:preview my-branch  # branch preview (alias on the same Worker)
 ```
 
-CI runs the same thing in `.github/workflows/deploy-worker.yaml` using the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`: pushes to `main` deploy production, other branches and pull requests publish a preview alias. Each deploy verifies `/` and `/healthz` and posts the URL as a commit/PR comment.
+CI runs the same thing in `.github/workflows/deploy-worker.yaml` using the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`: pushes to `main` deploy production, other branches and pull requests publish a preview alias. Each deploy verifies `/` and `/healthz` — retrying for about a minute, because the first deploy to a freshly enabled subdomain can answer 404 while it propagates — and posts the URL, the asset count and the version id as a commit/PR comment.
+
+Before deploying, the workflow runs a pre-flight: `wrangler whoami` (is the token accepted, and can it see `CLOUDFLARE_ACCOUNT_ID`?) plus a query of the account's `workers.dev` subdomain. If `workers.dev` is switched off the run stops with instructions, unless the repository *variable* `WORKERS_DEV_SUBDOMAIN` (Settings → Secrets and variables → Actions → Variables) is set — then CI enables the subdomain itself. A failed deploy publishes redacted diagnostics (`whoami`, the subdomain response, the last 60 lines of wrangler output) on the head commit and on the pull request, so the cause is readable without opening the runner logs.
 
 ## Use it
 
