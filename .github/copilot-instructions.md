@@ -43,14 +43,18 @@ text is in [`AGENTS.md`](../AGENTS.md); per-topic copies live in `.claude/rules/
 
 ## 4. Live server: Cloudflare Workers via Wrangler (`workers.dev`)
 
-- Dev/live server is **Wrangler**: `wrangler dev` locally, `wrangler deploy` for the live
-  `https://<worker>.<account-subdomain>.workers.dev` URL.
-- **Vite stays only as the build tool** (`vite build` → `dist/`, served by the Worker's
-  `assets` config). `npm run dev` is no longer the preview mechanism.
-- Domain: default **`workers.dev`** subdomain only — do not add `routes`/`custom_domains`
-  without asking.
+- **Local loop:** `npm run watch` (`vite build --watch`) + `npm run worker:dev`
+  (`wrangler dev --ip 0.0.0.0 --port 8787`, serves the Worker plus `dist/`).
+- **Live/public:** `npm run deploy` → `https://liquid-glass-ux.<subdomain>.workers.dev`.
+  CI: `.github/workflows/deploy-worker.yaml` — `main` → production, other branches/PRs →
+  `wrangler versions upload --preview-alias <slug>`.
+- **`npm run dev` (Vite dev server) stays as a local-only CSS/SVG tuning tool with HMR** —
+  never in CI, never public, and not the preview mechanism.
+- Vite is otherwise only a build tool: `dist/` is served through the `ASSETS` binding with
+  `not_found_handling: "single-page-application"`; routes in `assets.run_worker_first`
+  (`/healthz`, `/api/*`) go to the Hono Worker in `src/worker.ts`.
+- Domain: default **`workers.dev`** only — no `routes`/`custom_domains` without asking.
 - Credentials only from Actions secrets `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`;
-  never hardcode, log, or print them.
-- Keep the `npm run sync:ci` watcher running unless asked to stop it.
-- Transitional: `.github/workflows/preview-live.yaml` (Vite behind a tunnel) is retired
-  once the Worker deploy path is verified.
+  never hardcode, log, print, or ask for them in chat.
+- **Removed, do not reintroduce without asking:** `preview-live.yaml`,
+  `scripts/live-preview-server.sh`, `scripts/sync-ci-preview.sh` (`npm run sync:ci`).

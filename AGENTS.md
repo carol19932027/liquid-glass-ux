@@ -47,16 +47,25 @@ Read this file at the start of each turn and comply before doing anything else.
 
 ## 4. Live server: Cloudflare Workers via Wrangler (`workers.dev`)
 
-- The dev/live server is **Wrangler**, not the Vite dev server:
-  - local: `wrangler dev` (serves the Worker plus the built assets)
-  - live: `wrangler deploy` → `https://<worker>.<account-subdomain>.workers.dev`
-- **Vite remains only as the build tool**: `vite build` → `dist/`, which the Worker serves
-  through its `assets` configuration. Do not use `npm run dev` as the preview mechanism.
+- **Local loop (two processes):**
+  - `npm run watch` → `vite build --watch` (rebuilds `dist/` on every source change)
+  - `npm run worker:dev` → `wrangler dev --ip 0.0.0.0 --port 8787` (serves the Worker plus
+    `dist/` — the production-shaped artifact)
+- **Live/public:** `npm run deploy` → `wrangler deploy` →
+  `https://liquid-glass-ux.<account-subdomain>.workers.dev`. CI does the same in
+  `.github/workflows/deploy-worker.yaml`: `main` → production deploy, other branches and
+  pull requests → `wrangler versions upload --preview-alias <slug>`.
+- **`npm run dev` (the Vite dev server) stays as a local-only convenience** for tuning
+  CSS/SVG with HMR. It is never used in CI, never exposed publicly, and is **not** the
+  preview mechanism.
+- Otherwise Vite is only a build tool: `vite build` → `dist/`, served by the Worker through
+  the `ASSETS` binding with `not_found_handling: "single-page-application"`. Server routes
+  listed in `assets.run_worker_first` (`/healthz`, `/api/*`) are handled by the Hono Worker
+  in `src/worker.ts` — without that list they would be answered with `index.html`.
 - Domain: the default Cloudflare **`workers.dev`** subdomain. No custom domain or zone is
   configured, so do not add `routes` / `custom_domains` without asking first.
 - Credentials come only from GitHub Actions secrets `CLOUDFLARE_API_TOKEN` and
-  `CLOUDFLARE_ACCOUNT_ID`. Never hardcode, log, or print them.
-- Keep the workspace↔CI sync watcher (`npm run sync:ci`) running unless the user asks to
-  stop it.
-- Transitional: `.github/workflows/preview-live.yaml` (Vite dev server behind a tunnel)
-  exists only until the Worker deploy path is verified end-to-end, then it gets retired.
+  `CLOUDFLARE_ACCOUNT_ID`. Never hardcode, log, print, or ask for them in chat.
+- **Removed and not to be reintroduced without asking:** the tunnel-based HMR preview
+  (`.github/workflows/preview-live.yaml`, `scripts/live-preview-server.sh`) and the
+  auto-commit watcher (`scripts/sync-ci-preview.sh`, `npm run sync:ci`).

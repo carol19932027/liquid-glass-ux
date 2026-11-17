@@ -2,6 +2,11 @@ node_modules
 dist
 .DS_Store
 .claude/settings.local.json
+
+# wrangler local state and secrets (never commit .dev.vars)
+.wrangler/
+.dev.vars
+.dev.vars.*
 **/skills/impeccable/scripts/bin/
 
 # impeccable-ignore-start
