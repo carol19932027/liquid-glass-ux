@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Impeccable live — ios-tab-bar</title>
+    <link rel="stylesheet" href="./ios-tokens.css" />
+    <style>
+      * { box-sizing: border-box; }
+      html { color-scheme: light dark; }
+      body {
+        margin: 0;
+        background: var(--ios-bg);
+        color: var(--ios-label);
+        font: 17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+        letter-spacing: -0.01em;
+      }
+      ::selection { background: color-mix(in oklab, var(--ios-tint) 30%, transparent); }
+      html { caret-color: var(--ios-tint); scrollbar-color: var(--ios-label-3) transparent; }
+      output { font-variant-numeric: tabular-nums; }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 18px;
+        background: var(--ios-bg);
+      }
+      h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+      header p { margin: 2px 0 0; font-size: 13px; color: var(--ios-label-2); }
+      .lang {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 7px 14px;
+        background: var(--ios-bg-2);
+        color: var(--ios-tint);
+        font: 600 13px/1 system-ui, sans-serif;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+      }
+      main { padding: 6px 18px 140px; max-width: 640px; margin-inline: auto; }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 14px;
+        background: var(--ios-bg-2);
+        border-radius: 14px;
+        margin-bottom: 8px;
+      }
+      .row .dot {
+        flex: none;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: color-mix(in oklab, var(--ios-tint) 14%, var(--ios-bg-2));
+        color: var(--ios-tint);
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        font-weight: 650;
+      }
+      .row b { display: block; font-size: 15px; font-weight: 600; }
+      .row small { color: var(--ios-label-2); font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>ios-tab-bar</h1>
+        <p>Impeccable live · چهار واریانت، تنظیمات tune در نوار ابزار</p>
+      </div>
+      <button class="lang" type="button" id="lang">EN / فا</button>
+    </header>
+
+    <main id="feed">
+      <!-- content layer stays solid: glass belongs to the control layer -->
+    </main>
+
+    <div data-impeccable-variants="ios-tab-bar" data-impeccable-variant-count="4" style="display: contents">
+      <div
+        data-impeccable-variant="1"
+        data-impeccable-variant-label="V1 کپسول شناور" data-fa="V1 کپسول شناور" data-en="V1 floating capsule"
+        data-impeccable-params='[
+          {"id":"blur","kind":"range","min":4,"max":28,"step":1,"default":18,"label":"Blur","labelFa":"محو"},
+          {"id":"intensity","kind":"range","min":0,"max":1,"step":0.05,"default":0.5,"label":"Glass intensity","labelFa":"شدت شیشه"},
+          {"id":"specular","kind":"range","min":0,"max":1,"step":0.05,"default":1,"label":"Specular rim","labelFa":"لبهٔ specular"},
+          {"id":"radius","kind":"range","min":18,"max":34,"step":1,"default":28,"label":"Corner radius","labelFa":"گوشه"}
+        ]'
+      >
+        <ios-tab-bar look="capsule" scroll-target=""></ios-tab-bar>
+      </div>
+      <div
+        data-impeccable-variant="2"
+        data-impeccable-variant-label="V2 نوار لبه‌به‌لبه" data-fa="V2 نوار لبه‌به‌لبه" data-en="V2 edge-to-edge band"
+        style="display: none"
+        data-impeccable-params='[
+          {"id":"blur","kind":"range","min":4,"max":28,"step":1,"default":18,"label":"Blur","labelFa":"محو"},
+          {"id":"intensity","kind":"range","min":0,"max":1,"step":0.05,"default":0.5,"label":"Glass intensity","labelFa":"شدت شیشه"},
+          {"id":"specular","kind":"range","min":0,"max":1,"step":0.05,"default":1,"label":"Specular rim","labelFa":"لبهٔ specular"}
+        ]'
+      >
+        <ios-tab-bar look="band"></ios-tab-bar>
+      </div>
+      <div
+        data-impeccable-variant="3"
+        data-impeccable-variant-label="V3 کپسول + جستجو" data-fa="V3 کپسول + جستجو" data-en="V3 capsule + search"
+        style="display: none"
+        data-impeccable-params='[
+          {"id":"blur","kind":"range","min":4,"max":28,"step":1,"default":18,"label":"Blur","labelFa":"محو"},
+          {"id":"intensity","kind":"range","min":0,"max":1,"step":0.05,"default":0.5,"label":"Glass intensity","labelFa":"شدت شیشه"},
+          {"id":"specular","kind":"range","min":0,"max":1,"step":0.05,"default":1,"label":"Specular rim","labelFa":"لبهٔ specular"},
+          {"id":"radius","kind":"range","min":18,"max":34,"step":1,"default":28,"label":"Corner radius","labelFa":"گوشه"}
+        ]'
+      >
+        <ios-tab-bar look="search"></ios-tab-bar>
+      </div>
+      <div
+        data-impeccable-variant="4"
+        data-impeccable-variant-label="V4 داوک فشرده" data-fa="V4 داوک فشرده" data-en="V4 compact dock"
+        style="display: none"
+        data-impeccable-params='[
+          {"id":"blur","kind":"range","min":4,"max":28,"step":1,"default":18,"label":"Blur","labelFa":"محو"},
+          {"id":"intensity","kind":"range","min":0,"max":1,"step":0.05,"default":0.5,"label":"Glass intensity","labelFa":"شدت شیشه"},
+          {"id":"specular","kind":"range","min":0,"max":1,"step":0.05,"default":1,"label":"Specular rim","labelFa":"لبهٔ specular"},
+          {"id":"radius","kind":"range","min":18,"max":34,"step":1,"default":24,"label":"Corner radius","labelFa":"گوشه"}
+        ]'
+      >
+        <ios-tab-bar look="dock"></ios-tab-bar>
+      </div>
+    </div>
+
+    <script type="module">
+      import "./ios-tab-bar.js";
+      import "../.impeccable/live/toolbar-shim.js";
+
+      const LABELS = {
+        fa: [
+          { id: "desktop", label: "میزکار", icon: "home" },
+          { id: "apps", label: "برنامه‌ها", icon: "grid" },
+          { id: "assistant", label: "دستیار", icon: "sparkle" },
+        ],
+        en: [
+          { id: "desktop", label: "Desktop", icon: "home" },
+          { id: "apps", label: "Apps", icon: "grid" },
+          { id: "assistant", label: "Assistant", icon: "sparkle" },
+        ],
+      };
+      const SEARCH = {
+        fa: { id: "search", label: "جستجو", icon: "search" },
+        en: { id: "search", label: "Search", icon: "search" },
+      };
+
+      const feed = document.querySelector("#feed");
+      const ROWS = {
+        fa: ["یادداشت طراحی", "کتابخانهٔ مواد", "توکن‌های رنگ", "رفتار شکست نور", "پیش‌نمایش زنده", "کامپوننت شیشه‌ای", "ناوبری بومی", "پالت سکانتیک", "حالت تاریک", "دسترس‌پذیری", "کشیدن لبه", "فنر انتخاب", "لایهٔ کنترل", "سطح محتوا"],
+        en: ["Design notes", "Material library", "Color tokens", "Refraction behaviour", "Live preview", "Glass component", "Native navigation", "Semantic palette", "Dark appearance", "Accessibility", "Edge swipe", "Selection spring", "Control layer", "Content layer"],
+      };
+      const paintFeed = (lang) => {
+        feed.innerHTML = ROWS[lang]
+          .map(
+            (t, i) =>
+              `<div class="row"><span class="dot">${i + 1}</span><div><b>${t}</b><small>${
+                lang === "fa" ? "لایهٔ محتوا — بدون شیشه" : "Content layer — no glass"
+              }</small></div></div>`
+          )
+          .join("");
+      };
+
+      const applyLang = (lang) => {
+        document.documentElement.lang = lang;
+        document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
+        for (const v of document.querySelectorAll("[data-impeccable-variant]"))
+          v.dataset.impeccableVariantLabel = v.dataset[lang];
+        document.dispatchEvent(new CustomEvent("impeccable-locale", { detail: { lang } }));
+        paintFeed(lang);
+        const base = LABELS[lang];
+        for (const bar of document.querySelectorAll("ios-tab-bar")) {
+          const items = bar.look === "search" ? [...base, SEARCH[lang]] : base;
+          bar.items = items;
+        }
+      };
+      let lang = "fa";
+      applyLang(lang);
+      document.querySelector("#lang").addEventListener("click", () => {
+        lang = lang === "fa" ? "en" : "fa";
+        applyLang(lang);
+      });
+    </script>
+  </body>
+</html>

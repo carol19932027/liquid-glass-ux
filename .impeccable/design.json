@@ -17,13 +17,62 @@
     "--ios-glass-tint-thick"
   ],
   "components": [
-    { "native": "Tab bar", "element": "ios-tab-bar", "status": "shaped" },
-    { "native": "Navigation bar", "element": "ios-nav-bar", "status": "planned" },
-    { "native": "Toolbar", "element": "ios-toolbar", "status": "planned" },
-    { "native": "Button", "element": "ios-button", "status": "planned" },
-    { "native": "Segmented control", "element": "ios-segmented", "status": "planned" },
-    { "native": "Switch", "element": "ios-switch", "status": "planned" },
-    { "native": "Sheet", "element": "ios-sheet", "status": "planned" },
-    { "native": "Search bar", "element": "ios-search-bar", "status": "planned" }
+    {
+      "native": "Tab bar",
+      "element": "ios-tab-bar",
+      "status": "live",
+      "showcase": "components/demo.html via impeccable live toolbar (shim)",
+      "variants": [
+        "capsule",
+        "band",
+        "search",
+        "dock"
+      ],
+      "params": [
+        "blur",
+        "intensity",
+        "specular",
+        "radius"
+      ],
+      "locales": [
+        "fa-RTL",
+        "en-LTR"
+      ]
+    },
+    {
+      "native": "Navigation bar",
+      "element": "ios-nav-bar",
+      "status": "planned"
+    },
+    {
+      "native": "Toolbar",
+      "element": "ios-toolbar",
+      "status": "planned"
+    },
+    {
+      "native": "Button",
+      "element": "ios-button",
+      "status": "planned"
+    },
+    {
+      "native": "Segmented control",
+      "element": "ios-segmented",
+      "status": "planned"
+    },
+    {
+      "native": "Switch",
+      "element": "ios-switch",
+      "status": "planned"
+    },
+    {
+      "native": "Sheet",
+      "element": "ios-sheet",
+      "status": "planned"
+    },
+    {
+      "native": "Search bar",
+      "element": "ios-search-bar",
+      "status": "planned"
+    }
   ]
 }

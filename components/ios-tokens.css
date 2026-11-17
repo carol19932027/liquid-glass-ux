@@ -1,0 +1,82 @@
+/* iOS 27 liquid-glass tokens — the web baseline from DESIGN.md §2–§3.
+   Components consume these on :host; both appearances ship. */
+:root {
+  color-scheme: light dark;
+
+  /* semantic system colours */
+  --ios-label: #000000;
+  --ios-label-2: rgba(60, 60, 67, 0.6);
+  --ios-label-3: rgba(60, 60, 67, 0.3);
+  --ios-separator: rgba(60, 60, 67, 0.29);
+  --ios-bg: #f2f2f7;
+  --ios-bg-2: #ffffff;
+  --ios-tint: #007aff;
+  --ios-tint-warm: #ff9f0a;
+
+  /* tab-bar foregrounds: the system tint and secondary label do not clear
+     4.5:1 at 11px, so the control layer carries text-safe variants */
+  --ios-tab-active: #0060d6;
+  --ios-tab-inactive: rgba(60, 60, 67, 0.78);
+
+  /* glass tints (clear → regular → thick) */
+  --ios-glass-tint-clear: rgba(255, 255, 255, 0.4);
+  --ios-glass-tint-regular: rgba(248, 248, 250, 0.66);
+  --ios-glass-tint-thick: rgba(248, 248, 250, 0.8);
+
+  /* frost chain, regular variant */
+  --ios-glass-blur: 18px;
+  --ios-glass-saturate: 160%;
+  --ios-glass-brightness: 1.06;
+  --ios-glass-contrast: 1.04;
+
+  /* specular rim: top-weighted, key light 315° */
+  --ios-rim: 255 255 255;
+  --ios-rim-top: 0.55;
+  --ios-rim-side: 0.2;
+  --ios-rim-border: 0.18;
+  --ios-lift: 0 8px 32px rgba(0, 0, 0, 0.25);
+
+  /* geometry */
+  --ios-radius-bar: 28px;
+  --ios-target: 44px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ios-label: #ffffff;
+    --ios-label-2: rgba(235, 235, 245, 0.6);
+    --ios-label-3: rgba(235, 235, 245, 0.3);
+    --ios-separator: rgba(84, 84, 88, 0.65);
+    --ios-bg: #000000;
+    --ios-bg-2: #1c1c1e;
+    --ios-tint: #0a84ff;
+    --ios-tab-active: #6cb2ff;
+    --ios-tab-inactive: rgba(235, 235, 245, 0.82);
+
+    --ios-glass-tint-clear: rgba(28, 28, 32, 0.3);
+    --ios-glass-tint-regular: rgba(34, 34, 38, 0.62);
+    --ios-glass-tint-thick: rgba(44, 44, 48, 0.78);
+
+    --ios-rim-top: 0.34;
+    --ios-rim-side: 0.14;
+    --ios-rim-border: 0.14;
+    --ios-lift: 0 8px 32px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* Reduce Transparency: frostier, more opaque — never a bare pane */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --ios-glass-blur: 2px;
+    --ios-glass-tint-clear: rgba(248, 248, 250, 0.86);
+    --ios-glass-tint-regular: rgba(248, 248, 250, 0.92);
+    --ios-glass-tint-thick: rgba(248, 248, 250, 0.96);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ios-glass-tint-clear: rgba(40, 40, 44, 0.9);
+      --ios-glass-tint-regular: rgba(44, 44, 48, 0.94);
+      --ios-glass-tint-thick: rgba(50, 50, 54, 0.97);
+    }
+  }
+}

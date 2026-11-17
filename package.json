@@ -16,7 +16,9 @@
     "guard:glass": "bash scripts/guard-glass.sh",
     "guard:frameworks": "bash scripts/guard-frameworks.sh",
     "verify:rail": "node scripts/verify-rail-geometry.mjs",
-    "verify:rail:frames": "node scripts/verify-rail-frames.mjs"
+    "verify:rail:frames": "node scripts/verify-rail-frames.mjs",
+    "serve:components": "node scripts/serve-components.mjs",
+    "verify:components": "node scripts/verify-components.mjs"
   },
   "devDependencies": {
     "@sparticuz/chromium": "^153.0.0",
