@@ -124,26 +124,39 @@ jobs:
               process.exit(0);
             }
             const r=j.result||{};
-            console.log(`SUBDOMAIN_STATE=${r.enabled===true?"enabled":"disabled"}`);
-            console.log(`SUBDOMAIN_NAME=${r.subdomain||""}`);
+            const name=r.subdomain||"";
+            // The API can omit `enabled` entirely; only an explicit false means disabled.
+            let state;
+            if (r.enabled===true) state="enabled";
+            else if (r.enabled===false) state="disabled";
+            else state=name?"unreported":"unknown";
+            console.log(`SUBDOMAIN_STATE=${state}`);
+            console.log(`SUBDOMAIN_NAME=${name}`);
           ' > /tmp/cf/subdomain.txt
           cat /tmp/cf/subdomain.txt
           STATE=$(sed -n 's/^SUBDOMAIN_STATE=//p' /tmp/cf/subdomain.txt)
+          NAME=$(sed -n 's/^SUBDOMAIN_NAME=//p' /tmp/cf/subdomain.txt)
           echo "subdomain_state=${STATE}" >> "$GITHUB_OUTPUT"
+          echo "subdomain_name=${NAME}" >> "$GITHUB_OUTPUT"
 
-          if [ "$STATE" = "disabled" ] || [ "$STATE" = "api-error" ] || [ "$STATE" = "unparseable" ]; then
-            if [ -n "${WORKERS_DEV_SUBDOMAIN:-}" ]; then
-              echo "enabling workers.dev subdomain '${WORKERS_DEV_SUBDOMAIN}'…"
-              curl -sS -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-                -H 'Content-Type: application/json' \
-                -d "{\"subdomain\":\"${WORKERS_DEV_SUBDOMAIN}\",\"enabled\":true,\"previews_enabled\":true}" \
-                "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
-                > /tmp/cf/subdomain-set.json 2>&1 || true
-              cat /tmp/cf/subdomain-set.json
-            else
-              echo "::error::workers.dev is not usable on this account (state: ${STATE}). Enable it in the dashboard (Workers & Pages → Settings → Domains & Routes → workers.dev), or set the repository variable WORKERS_DEV_SUBDOMAIN to the name you want and re-run this workflow."
-              exit 1
-            fi
+          # Only an explicit `enabled: false` blocks the deploy. Anything the API did
+          # not report is left to `wrangler deploy`, whose error we publish verbatim —
+          # guessing here previously turned a working account into a failed run.
+          if [ "$STATE" = "enabled" ]; then
+            echo "workers.dev subdomain '${NAME}' is enabled"
+          elif [ -n "${WORKERS_DEV_SUBDOMAIN:-}" ] && [ "$STATE" != "unreported" ]; then
+            echo "enabling workers.dev subdomain '${WORKERS_DEV_SUBDOMAIN}'…"
+            curl -sS -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              -d "{\"subdomain\":\"${WORKERS_DEV_SUBDOMAIN}\",\"enabled\":true,\"previews_enabled\":true}" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
+              > /tmp/cf/subdomain-set.json 2>&1 || true
+            cat /tmp/cf/subdomain-set.json
+          elif [ "$STATE" = "disabled" ]; then
+            echo "::error::workers.dev is disabled on this account. Enable it in the dashboard (Workers & Pages → Settings → Domains & Routes → workers.dev), or set the repository variable WORKERS_DEV_SUBDOMAIN to the name you want and re-run this workflow."
+            exit 1
+          else
+            echo "::warning::workers.dev state could not be determined from the API (state: ${STATE}) — continuing; 'wrangler deploy' will report the authoritative error"
           fi
 
       - name: Deploy to Cloudflare Workers
@@ -266,7 +279,9 @@ jobs:
             if [ -n "$VERSION_LINE" ]; then echo "- **${VERSION_LINE}**"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-          gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+          TARGET_SHA="${{ github.event.pull_request.head.sha }}"
+          TARGET_SHA="${TARGET_SHA:-${GITHUB_SHA}}"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/comments" \
             -f body="$BODY" >/dev/null 2>&1 || echo "::warning::could not post commit comment"
 
           PR_NUMBER="${{ github.event.pull_request.number || '' }}"
@@ -318,6 +333,33 @@ jobs:
           } > /tmp/cf/diag.md
 
           cat /tmp/cf/diag.md
-          gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+
+          # GITHUB_SHA is the merge commit on pull_request runs, which is not part of
+          # the branch history — commenting there is invisible. Prefer the head SHA.
+          TARGET_SHA="${{ github.event.pull_request.head.sha }}"
+          TARGET_SHA="${TARGET_SHA:-${GITHUB_SHA}}"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/comments" \
             -F body=@/tmp/cf/diag.md >/dev/null 2>&1 \
-            || echo "::warning::could not post the diagnostics comment"
+            || echo "::warning::could not post the diagnostics commit comment"
+
+          PR_NUMBER="${{ github.event.pull_request.number || '' }}"
+          if [ -z "$PR_NUMBER" ]; then
+            PR_NUMBER=$(gh pr list --head "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}" --state open \
+              --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          fi
+          if [ -n "$PR_NUMBER" ]; then
+            {
+              echo "<!-- worker-deploy-diagnostics -->"
+              cat /tmp/cf/diag.md
+            } > /tmp/cf/diag-pr.md
+            EXISTING=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --jq '.[] | select(.body | contains("<!-- worker-deploy-diagnostics -->")) | .id' 2>/dev/null | head -n 1 || true)
+            if [ -n "$EXISTING" ]; then
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${EXISTING}" \
+                -F body=@/tmp/cf/diag-pr.md >/dev/null 2>&1 || true
+            else
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+                -F body=@/tmp/cf/diag-pr.md >/dev/null 2>&1 \
+                || echo "::warning::could not post the diagnostics PR comment"
+            fi
+          fi
