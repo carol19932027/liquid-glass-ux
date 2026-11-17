@@ -122,18 +122,17 @@ of `.rail` — a sibling of both hosts, never an ancestor. CSS: absolute,
 Driver (`src/main.ts`, `neckFrame`): started by the switch's `change` event
 (never on load) and gated by `prefers-reduced-motion`. Visibility is pure
 geometry; the loop parks itself once the caps have read identical for ~20
-frames (the drawn neck persists as a plain style), and a resize restarts a
-short run to re-seat it. Every frame it reads the live cap rects and works
-in two regimes:
+frames or the neck has finished fading. Every frame it reads the live cap
+rects and works in two regimes:
 
 - **Metaball bridge** — caps apart or nearly: waist
-  `w = 20 + 28·min(1, max(0, 1 − sep/10))^1.35` with `sep = gap + rise/2`.
-  The +20 is a **resting waist**: like the reference's separated state, the
-  compact rail keeps a thin sticky neck forever (the drawn style persists
-  after the loop parks itself — ~20 identical cap reads, or a resize
-  re-seats it). As the caps meet the waist swells to the full 48px fusion;
-  the path tucks 26px under each cap so the concave fillets flare wide,
-  like the reference's deep pinch, and the seams hide under their glass.
+  `w = 48·min(1, max(0, 1 − sep/10))^1.35` with `sep = gap + rise/2`, so the
+  waist pinches to zero exactly at the 10px resting gap and both resting
+  states stay neckless; the path tucks 26px under each cap so the concave
+  fillets flare wide, like the reference's deep pinch, and the seams hide
+  under their glass. (A persistent resting neck matching the reference's
+  separated state was built once and removed again on user request — the
+  neck lives only inside the motion.)
 - **Melt-away** — once the geometry says hide, the last path is held and
   faded over 140ms (opacity on the neck only — a sibling, never a host), so
   the thread is seen dissolving into the caps instead of blinking out.
@@ -147,20 +146,19 @@ in two regimes:
   snap until the morph has swallowed the pill or the tab parks away
   (`rise ≤ 1.5`, seam outside the tab span, or the tab `visibility:hidden`).
 
-On split the sequence reads fused band → stretching ligament → the thin
-resting neck; on merge the resting neck swells → fusion snap → wet seam
-sweeping shut → neckless label pill. The label rest stays neckless (the
-pill itself is the fused body), so the ghost diff remains 0.
+On split the sequence reads fused band → stretching ligament → sliver →
+pinch; on merge, thread → fusion snap → wet seam sweeping shut. Both
+resting states stay neckless, so the ghost diff remains 0.
 
 Verification added to `scripts/verify-rail-geometry.mjs`: per-frame neck
 visibility + the caps the driver used (`data-span`), asserting the neck is
 hidden in the first/last frames of each direction, visible mid-morph, its
 14px tuck exact, its rects live (within a 3-frame window of the recorder's
 own reads), the rail and both hosts free of `filter`/`backdrop-filter`, and
-the neck never visible under `prefers-reduced-motion`. Latest run: open 78
-visible frames ending in the persistent resting neck (hidden→visible),
-close 17 (visible→hidden), `problems: []`, `ghostAbsoluteErrorPixels: 0`,
-tabsLeft 625 constant, cover drift 0.
+the neck never visible under `prefers-reduced-motion`. Latest run: open 20
+visible frames, close 15, both resting states neckless (hidden→hidden),
+`problems: []`, `ghostAbsoluteErrorPixels: 0`, tabsLeft 625 constant,
+cover drift 0.
 
 Reading the effect on the live site: the neck exists only *inside* the
 morph — flip the "Morph" switch in the page header (next to the logo) and

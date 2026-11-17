@@ -432,20 +432,20 @@ const neckFrame = (now: number) => {
   const tabVis = getComputedStyle(railTabsHost).visibility === "visible";
   // Regime 1 — metaball bridge: the caps are apart (or nearly), the waist
   // thins with the gap and pinches off exactly at the 10px resting gap.
-  // Metaball falloff on top of a RESTING waist: like the reference's
-  // separated state, the caps keep a thin sticky neck (20px) even fully
-  // apart, and it swells to full height (48px) as they meet.
+  // Metaball falloff: the waist swells to full height (48px) as the caps
+  // meet and pinches to zero exactly at the 10px resting gap — the neck
+  // lives only inside the motion; both resting states stay neckless.
   const sep = gap + 0.5 * rise;
-  const wBridge = 20 + 28 * Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.35);
-  const bridge = tabVis && gap + 52 > 1;
+  const wBridge = 48 * Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.35);
+  const bridge = tabVis && wBridge > 0.75 && gap + 52 > 1;
   // Regime 2 — wet seam: the caps overlap, so the junction is the vertical
   // seam where the morph's right cap sweeps across the tab pill. The neck
   // straddles that seam at full height — the fused liquid body — from the
   // fusion snap until the morph has swallowed the pill (or it parks).
   const straddle =
     tabVis && gap < 0 && rise > 1.5 && seamX > tl + 2 && seamX < trght - 16;
-  // Visibility is pure geometry: the compact rest keeps its thin neck
-  // forever (the style persists after the loop parks itself).
+  // Visibility is pure geometry: at rest the waist is zero, so both
+  // resting states stay neckless and the loop parks itself.
   const show = bridge || straddle;
   // Rest detection: ~20 identical cap reads mean the morph has settled, so
   // the loop can stop — the last drawn neck stays as a persisted style.
@@ -533,7 +533,3 @@ const startNeck = () => {
   neckLastRise = NaN;
   if (!neckReq) neckReq = requestAnimationFrame(neckFrame);
 };
-
-// The resting neck is a persisted style, so a viewport change (which moves
-// the caps) re-runs a short run to re-seat it on the live rects.
-addEventListener("resize", startNeck);

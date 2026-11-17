@@ -168,13 +168,9 @@ for (const [dir, fr] of [
   ["open", openFrames],
   ["close", closeFrames],
 ]) {
-  // label rest is neckless; compact rest keeps the reference's thin
-  // sticky neck, so open ends visible and close starts visible
-  const [wantStart, wantEnd] = dir === "open" ? ["hidden", "visible"] : ["visible", "hidden"];
-  if (fr[0]?.neckVis !== wantStart || fr.at(-1)?.neckVis !== wantEnd)
-    problems.push(
-      `neck: ${dir} resting states ${fr[0]?.neckVis}..${fr.at(-1)?.neckVis}, want ${wantStart}..${wantEnd}`
-    );
+  // both resting states stay neckless: the neck lives only in the motion
+  if (fr[0]?.neckVis !== "hidden" || fr.at(-1)?.neckVis !== "hidden")
+    problems.push(`neck: ${dir} resting state is not neckless`);
   const vis = fr.filter((f) => f.neckVis === "visible");
   if (!vis.length) problems.push(`neck: ${dir} never visible mid-morph`);
   // fade frames hold the last live path on purpose (melt-away), so the
