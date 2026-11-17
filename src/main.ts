@@ -318,7 +318,13 @@ const railMorph = document.querySelector<HTMLAnchorElement>(".rail-morph")!;
 const railSwitch = document.querySelector<HTMLInputElement>("#morph-switch")!;
 
 for (const host of document.querySelectorAll<HTMLElement>(".rail-host")) {
-  createLiquidGlass(host, { radius: 28 });
+  // reflect: false — the reflection layer overhangs its host by `pad` on
+  // every side, and the two rail hosts sit 10px apart, so their overhangs
+  // would overlap: two backdrop roots filtering each other's pixels,
+  // invalidating one another every frame, which blinks the glass out to
+  // near-transparent in the compact state, in any position, still or
+  // scrolling. Without the reflection layer the hosts cannot touch.
+  createLiquidGlass(host, { radius: 28, reflect: false });
 }
 
 const RAIL_STATES = {

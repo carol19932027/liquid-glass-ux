@@ -608,13 +608,18 @@ pre .k {
    transform ever touches a glass host, and both hosts carry min-width:
    56px so the spring can never undershoot the height and turn the width
    into the short side mid-motion (a rebake there swaps maps under a
-   moving host and flashes). The rail is an ordinary block in the document
-   flow: a constant-width box centred with auto margins, the pill flush
-   right inside it, so the cap that becomes the round button stays put
-   and the split grows leftwards. Nothing here is position: fixed — a
-   viewport-fixed glass repaints against a churning backdrop on every
-   scroll frame and blinks, and a transformed wrapper would become a
-   backdrop root anyway.
+   moving host and flashes). The rail is a constant-width box, fixed at
+   the bottom centre with its right edge pinned where the centred label
+   pill's cap sits, the pill flush right inside it (justify-content:
+   flex-end), so the cap that becomes the round button stays put and the
+   split grows leftwards. Both hosts are created with reflect: false:
+   the reflection layer overhangs its box on every side, and at a 10px
+   gap the two overhangs overlapped — two backdrop roots filtering each
+   other and invalidating one another every frame, which is what blinked
+   the glass out in the compact state, in every placement, still or
+   scrolling. The rail also lives outside <main>, because the library
+   promotes main into a layer of its own (will-change: transform), making
+   it a backdrop root that would swallow a fixed glass's backdrop.
 
    Choreography, per direction:
    open  - the pill shrinks with the spring; the dot pill appears at 60ms
@@ -626,18 +631,28 @@ pre .k {
            leaves by 200ms and the label returns at 180ms. */
 .rail {
   --rail-w: 236px;
-  /* In the document flow, on the black, at the bottom: nothing about the
-     rail is fixed to the viewport, so scrolling never repaints it and the
-     backdrop under it never churns. The box keeps a constant width and
-     centres with auto margins while the pill sits flush right inside it
-     (justify-content: flex-end), so the cap that becomes the round button
-     never travels: the split grows leftwards from a fixed point. */
+  /* Fixed again, bottom centre. The blink was never the positioning: it
+     was the two reflection layers overhanging into each other (see the
+     reflect: false note in main.ts), and that is gone. The box keeps a
+     constant width and pins its right edge to where the centred label
+     pill's right cap sits, so the cap that becomes the round button
+     never travels: the split grows leftwards from a fixed point. The
+     ink follows the page half through the existing html.end-dark class
+     — a colour transition on the wrapper, none of the properties that
+     turn an element into a backdrop root. */
+  position: fixed;
+  bottom: clamp(16px, 3vh, 28px);
+  right: calc(50% - var(--rail-w) / 2);
+  z-index: 40;
   width: var(--rail-w);
-  margin: clamp(40px, 6vw, 72px) auto clamp(56px, 8vw, 96px);
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  position: relative;
+  color: oklch(0.34 0.02 var(--hue));
+  transition: color 0.3s;
+}
+
+html.end-dark .rail {
   color: oklch(0.97 0.004 var(--hue));
 }
 
@@ -772,9 +787,16 @@ pre .k {
 
 /* --- The morph switch -----------------------------------------------------
    The hand control for the morph: the only thing that changes data-state.
-   Middle child of the navbar row, in the flow like everything else here;
-   no fixed positioning, no scroll coupling. */
+   Fixed top centre, where the navbar row would put it; it carries no
+   glass, so being fixed costs it nothing. */
 .morph-switch {
+  position: fixed;
+  top: clamp(14px, 3vh, 26px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
+  z-index: 40;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -782,6 +804,11 @@ pre .k {
   cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
+  transition: color 0.3s;
+}
+
+html.end-dark .morph-switch {
+  color: oklch(0.97 0.004 var(--hue));
 }
 
 .morph-switch input {
