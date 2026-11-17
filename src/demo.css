@@ -742,27 +742,35 @@ html.end-dark .rail {
   align-items: center;
   justify-content: center;
   gap: 11px;
-  /* Hidden twice over: visibility for the a11y tree and focus, and
-     content-visibility so the subtree is not painted at all — no ghost
-     circle left beside the pill. The layout box stays 56x56 either way,
-     so the short side never moves and returning paints without rebake. */
   visibility: hidden;
-  content-visibility: hidden;
-  transition-behavior: allow-discrete;
   transition:
     width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    visibility 0s linear 0.3s,
-    content-visibility 0s linear 0.3s;
+    visibility 0s linear 0.3s;
+}
+
+/* The library parks two siblings beside every host — a tick before it
+   and a cover after it — and neither is a descendant, so hiding the
+   host never hid them: the hidden host's cover kept painting its
+   underlay and edge light as a bare disc beside the pill (the ghost
+   circle). Hide the siblings with the host, same delays. */
+.rail-dots + .lg-cover,
+.lg-tick:has(+ .rail-dots) {
+  visibility: hidden;
+  transition: visibility 0s linear 0.3s;
+}
+
+.rail[data-state="compact"] .rail-dots + .lg-cover,
+.rail[data-state="compact"] .lg-tick:has(+ .rail-dots) {
+  visibility: visible;
+  transition: visibility 0s linear 0.06s;
 }
 
 .rail[data-state="compact"] .rail-dots {
   width: 152px;
   visibility: visible;
-  content-visibility: visible;
   transition:
     width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.06s,
-    visibility 0s linear 0.06s,
-    content-visibility 0s linear 0.06s;
+    visibility 0s linear 0.06s;
 }
 
 .rail-dot {
