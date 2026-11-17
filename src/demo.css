@@ -637,9 +637,11 @@ pre .k {
      constant width and pins its right edge to where the centred label
      pill's right cap sits, so the cap that becomes the round button
      never travels: the split grows leftwards from a fixed point. The
-     ink follows the page half through the existing html.end-dark class
-     — a colour transition on the wrapper, none of the properties that
-     turn an element into a backdrop root. */
+   ink follows the page half through the existing html.end-dark class,
+   switched in ONE STEP at the boundary the way the library switches its
+   own dark tuning: a colour transition would repaint the glass every
+   frame for 300ms while scrolling, the scroll-tied blend HOW-IT-WORKS
+   §6 lists among its flickering attempts. */
   position: fixed;
   bottom: clamp(16px, 3vh, 28px);
   right: calc(50% - var(--rail-w) / 2);
@@ -647,7 +649,6 @@ pre .k {
   display: flex;
   align-items: center;
   color: oklch(0.34 0.02 var(--hue));
-  transition: color 0.3s;
 }
 
 html.end-dark .rail {
@@ -790,29 +791,54 @@ html.end-dark .rail {
     visibility 0s linear 0.06s;
 }
 
+/* The dot itself is a 7px layout box that only scales (the stagger);
+   the visible ink is a child pseudo, out of the flow, so the hover
+   stretch into a bar is carried by the child and never shifts a
+   neighbour — hover motion that moves siblings slides them out from
+   under their own pointer. The second pseudo widens the tap target
+   without widening the layout. */
 .rail-dot {
+  position: relative;
   width: 7px;
   height: 7px;
+  scale: 0;
+  transition: scale 0.14s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--i) * 15ms);
+}
+
+.rail-dot::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  translate: -50% -50%;
   border-radius: 50%;
   background: currentColor;
-  scale: 0;
   transition:
-    scale 0.14s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--i) * 15ms),
     width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
     border-radius 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.rail-dot::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  translate: -50% -50%;
 }
 
 .rail[data-state="compact"] .rail-dot {
   scale: 1;
-  transition:
-    scale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.14s + var(--i) * 55ms),
-    width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
-    border-radius 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: scale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.14s + var(--i) * 55ms);
 }
 
-/* The stretch from the reference: a dot grows into a bar under the pointer. */
-.rail-dot:hover,
-.rail-dot:focus-visible {
+/* The stretch from the reference: the child ink grows into a bar under
+   the pointer while every neighbour keeps its box. */
+.rail-dot:hover::before,
+.rail-dot:focus-visible::before {
   width: 26px;
   border-radius: 4px;
 }
@@ -836,7 +862,6 @@ html.end-dark .rail {
   cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
-  transition: color 0.3s;
 }
 
 html.end-dark .morph-switch {
