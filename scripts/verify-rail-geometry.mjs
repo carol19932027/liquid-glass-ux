@@ -1,12 +1,14 @@
 // Rail motion verification: geometry, ghost diff, console errors.
 //
+// The rail is notification-driven: calm (zero mail) is the tab pill alone,
+// centred; alert (badge > 0) melts the bell out of the pill's left cap.
 // Runs the built site in headless Chromium and records, per animation
-// frame, what the morph does: the tab pill's left/top, its glass cover's
-// rect (they must ride together — a drift means a ghost), the morph
-// host's width (must stay inside [56px, rail width]), and visibility
-// flips. Also pixel-diffs the label state before/after a full open+close
-// cycle (a ghost disc would show up as differing pixels) and collects
-// console/page errors.
+// frame, what the morph does: the tab pill's left/top (it now travels the
+// 33px re-centring ride on purpose), its glass cover's rect (they must
+// ride together — a drift means a ghost), the morph host's width (0 in
+// calm, 56 in alert), the neck, and the badge. Also pixel-diffs the calm
+// state before/after a full alert+calm cycle (a ghost disc would show up
+// as differing pixels) and collects console/page errors.
 //
 // Requirements:
 //   npm ci                        # installs playwright-core + @sparticuz/chromium
@@ -133,24 +135,49 @@ const startRecorder = () =>
 
 const collect = () => page.evaluate(() => window.__rec.frames);
 
-// --- 1. the label state (before anything moves) ---------------------------
-await page.screenshot({ path: shot("00-full-label.png") });
-await page.screenshot({ path: shot("01-rail-label.png"), clip });
+// --- 1. the calm state (zero mail: pill alone, centred, no bell) ----------
+const badgeState = () =>
+  page.evaluate(() => {
+    const b = document.querySelector(".rail-badge");
+    const m = document.querySelector(".rail-morph");
+    const cs = getComputedStyle(b);
+    return {
+      text: b.textContent,
+      scale: cs.scale,
+      morphVis: getComputedStyle(m).visibility,
+      morphHref: m.hasAttribute("href"),
+      state: document.querySelector(".rail").dataset.state,
+    };
+  });
+const report0 = {};
+report0.calmBadge = await badgeState();
+if (report0.calmBadge.state !== "calm") problems.push(`initial state ${report0.calmBadge.state}`);
+if (report0.calmBadge.morphVis !== "hidden") problems.push("calm: bell still visible");
+if (report0.calmBadge.morphHref) problems.push("calm: melted bell still a link");
+await page.screenshot({ path: shot("00-full-calm.png") });
+await page.screenshot({ path: shot("01-rail-calm.png"), clip });
 
-// --- 2. OPEN: switch on -> split ------------------------------------------
+// --- 2. ALERT: switch on -> mail arrives, bell melts out with the badge ---
 await startRecorder();
 await page.click(".morph-switch");
 await page.waitForTimeout(1400);
 const openFrames = await collect();
-await page.screenshot({ path: shot("00-full-compact.png") });
-await page.screenshot({ path: shot("02-rail-compact.png"), clip });
+report0.alertBadge = await badgeState();
+if (report0.alertBadge.state !== "alert") problems.push(`alert state ${report0.alertBadge.state}`);
+if (report0.alertBadge.text !== "3" || report0.alertBadge.scale !== "1")
+  problems.push(`alert badge: ${JSON.stringify(report0.alertBadge)}`);
+if (!report0.alertBadge.morphHref) problems.push("alert: bell lost its link");
+await page.screenshot({ path: shot("00-full-alert.png") });
+await page.screenshot({ path: shot("02-rail-alert.png"), clip });
 
-// --- 3. CLOSE: switch off -> merge ----------------------------------------
+// --- 3. CALM again: switch off -> mail cleared, bell melts back -----------
 await startRecorder();
 await page.click(".morph-switch");
 await page.waitForTimeout(1400);
 const closeFrames = await collect();
-await page.screenshot({ path: shot("03-rail-label-again.png"), clip });
+report0.calmAgainBadge = await badgeState();
+if (report0.calmAgainBadge.morphVis !== "hidden") problems.push("calm again: bell still visible");
+await page.screenshot({ path: shot("03-rail-calm-again.png"), clip });
 
 // --- 3b. the liquid neck: present mid-morph, absent at rest, caps tucked ---
 // The neck is a sibling of the hosts with its own backdrop-filter, so the
@@ -182,12 +209,16 @@ for (const [dir, fr] of [
     // rail actually had within the last three frames
     const win = fr.slice(Math.max(0, i - 2), i + 1).map((g) => g.morphR);
     const live = f.neckMorphR >= Math.min(...win) - 0.5 && f.neckMorphR <= Math.max(...win) + 0.5;
+    // the tab pill now travels (the re-centring ride), so the driver's
+    // tabs read can lag this recorder by a tick exactly like morph's
+    const winT = fr.slice(Math.max(0, i - 2), i + 1).map((g) => g.tabsLeft);
+    const tabsLive = f.neckTabsL >= Math.min(...winT) - 0.5 && f.neckTabsL <= Math.max(...winT) + 0.5;
     return !(
         Math.abs(f.neckL - (f.neckMorphR - 26)) <= 0.2 &&
         (Math.abs(f.neckR - (f.neckTabsL + 26)) <= 0.2 ||
           Math.abs(f.neckR - (f.neckMorphR + 26)) <= 0.2) &&
       live &&
-      Math.abs(f.neckTabsL - f.tabsLeft) <= 0.2
+      tabsLive
     );
   });
   if (bad.length)
@@ -207,8 +238,8 @@ await page.waitForTimeout(900);
 if (prmFrames.some((f) => f.neckVis === "visible"))
   problems.push("neck: visible under prefers-reduced-motion");
 
-// --- 4. ghost diff: state 3 must be pixel-identical to state 1 ------------
-const ghostAE = pixelDiff(shot("01-rail-label.png"), shot("03-rail-label-again.png"), shot("ghost-diff.png"));
+// --- 4. ghost diff: calm again must be pixel-identical to calm ------------
+const ghostAE = pixelDiff(shot("01-rail-calm.png"), shot("03-rail-calm-again.png"), shot("ghost-diff.png"));
 
 // --- 5. static assertions from the recorded frames -------------------------
 const analyze = (frames) => {
@@ -239,6 +270,7 @@ const analyze = (frames) => {
 
 const result = {
   url: URL,
+  badges: report0,
   browser: browser.version(),
   reducedMotion: await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches),
   railBox,
@@ -259,6 +291,7 @@ console.log(
       reducedMotion: result.reducedMotion,
       fontProbe,
       ghostAE,
+      badges: result.badges,
       open: result.open,
       close: result.close,
       problems: problems.slice(0, 6),

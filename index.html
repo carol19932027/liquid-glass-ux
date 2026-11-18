@@ -96,7 +96,7 @@
         <span>nordify<span class="dot">.</span></span>
       </a>
       <label class="morph-switch">
-        <input id="morph-switch" type="checkbox" role="switch" aria-label="Split the rail into two pieces" />
+        <input id="morph-switch" type="checkbox" role="switch" aria-label="Simulate arrived notifications: badge above zero splits the bell out of the rail" />
         <span class="morph-switch-track" aria-hidden="true"><span class="morph-switch-knob"></span></span>
         <span class="morph-switch-text">Morph</span>
       </label>
@@ -208,25 +208,25 @@ createLiquidGlass(element, { radius: 30 });</code></pre>
       </section>
     </main>
 
-    <!-- The morph rail: one glass pill that splits into a notification bell
-         button and an RTL Persian tab pill. data-state is the whole state
-         machine; the switch in the header tests the morph by hand. It lives
-         outside <main> on purpose:
-         the glass library promotes `main` into its own compositor layer
-         (will-change: transform), which makes it a backdrop root — a fixed
-         glass inside it would lose the page canvas from its backdrop. -->
-    <nav class="rail" data-state="label" aria-label="Navigation">
+    <!-- The morph rail, notification-driven: data-state="calm" (zero
+         notifications) is the tab pill alone, centred, in its own shape;
+         data-state="alert" (the badge has mail) melts the bell button out
+         of the pill's left cap and wears the badge. The switch in the
+         header simulates mail arriving (on) and being cleared (off); it
+         is the only writer of data-state. It lives outside <main> on
+         purpose: the glass library promotes `main` into its own compositor
+         layer (will-change: transform), which makes it a backdrop root — a
+         fixed glass inside it would lose the page canvas from its backdrop. -->
+    <nav class="rail" data-state="calm" aria-label="Navigation">
       <!-- The liquid neck: a gooey bridge between the bell's right cap and
            the tab pill's left cap, painted UNDER both hosts so its seams
            hide under their glass. A plain div clipped to a catenoid path
            with its own backdrop-filter — a backdrop root that contains no
            glass host, the only place a filter may live near the rail. -->
       <div class="rail-neck" aria-hidden="true"></div>
-      <a class="rail-host rail-morph" href="#accurate" aria-label="Browse the sections" data-lg-dark>
-        <!-- The label pops in per character, like the reference's ctaChar
-             spans: --c is the stagger index, the arrow taking the last. -->
-        <span class="rail-face rail-label"><span class="rail-chars"><span class="rail-char" style="--c:0">S</span><span class="rail-char" style="--c:1">e</span><span class="rail-char" style="--c:2">c</span><span class="rail-char" style="--c:3">t</span><span class="rail-char" style="--c:4">i</span><span class="rail-char" style="--c:5">o</span><span class="rail-char" style="--c:6">n</span><span class="rail-char" style="--c:7">s</span></span><svg class="rail-char" style="--c:8" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 3.5v9M4.5 9 8 12.5 11.5 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
+      <a class="rail-host rail-morph" href="#top" aria-label="Notifications" data-lg-dark>
         <span class="rail-face rail-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="18" height="18"><path fill="currentColor" d="M8 1.4c-2.4 0-4.3 1.9-4.3 4.3 0 2.5-.8 3.9-1.4 4.7-.3.4 0 .9.4.9h10.6c.4 0 .7-.5.4-.9-.6-.8-1.4-2.2-1.4-4.7 0-2.4-1.9-4.3-4.3-4.3Z" /><path fill="currentColor" d="M6.6 12.5a1.5 1.5 0 0 0 2.8 0Z" /></svg></span>
+        <span class="rail-badge" aria-hidden="true"></span>
       </a>
       <!-- The tab bar: three tabs read right to left (میزکار first, at the
            right end), so the host itself is the RTL island; lang="fa" keeps

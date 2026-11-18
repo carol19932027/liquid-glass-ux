@@ -320,11 +320,14 @@ if (!supportsRefraction) {
 }
 
 // --- The morph rail ---------------------------------------------------------
-// Two glass hosts, one data-state. The switch is the only writer: it flips
-// the rail between the labelled pill and the split notification-button-
-// plus-tab-bar, and everything else is the CSS transition set in demo.css.
-// The pill's own href follows the state: in-page while it labels the
-// sections, back to the top once it has become the bell button.
+// Two glass hosts, one data-state, driven by the notification count the
+// switch simulates: alert (badge > 0) is the bell button plus the tab
+// pill; calm (zero mail) keeps the navigation in its own shape and melts
+// ONLY the bell away, into the tab pill's left cap. The switch is the
+// only writer. The bell's own href/focusability follow the state: a live
+// Notifications link in alert, unfocusable and aria-hidden in calm, where
+// there is no button left to tab to.
+const NOTIFICATIONS = 3; // what the switch's "on" simulates as arrived
 const rail = document.querySelector<HTMLElement>(".rail")!;
 const railTabsHost = document.querySelector<HTMLElement>(".rail-tabs")!;
 const railMorph = document.querySelector<HTMLAnchorElement>(".rail-morph")!;
@@ -340,16 +343,24 @@ for (const host of document.querySelectorAll<HTMLElement>(".rail-host")) {
   createLiquidGlass(host, { radius: 28, reflect: false });
 }
 
-const RAIL_STATES = {
-  label: { href: "#accurate", label: "Browse the sections" },
-  compact: { href: "#top", label: "Notifications" },
-} as const;
+const railBadge = document.querySelector<HTMLElement>(".rail-badge")!;
 
-const setRailState = (compact: boolean) => {
-  rail.dataset.state = compact ? "compact" : "label";
-  const state = compact ? RAIL_STATES.compact : RAIL_STATES.label;
-  railMorph.href = state.href;
-  railMorph.setAttribute("aria-label", state.label);
+const setRailState = (alert: boolean) => {
+  rail.dataset.state = alert ? "alert" : "calm";
+  railBadge.textContent = String(NOTIFICATIONS);
+  if (alert) {
+    railMorph.href = "#top";
+    railMorph.removeAttribute("tabindex");
+    railMorph.removeAttribute("aria-hidden");
+    railMorph.setAttribute("aria-label", `Notifications, ${NOTIFICATIONS} unread`);
+  } else {
+    // no mail, no button: the bell is melted away, so it must not stay in
+    // the tab order or the accessibility tree
+    railMorph.removeAttribute("href");
+    railMorph.tabIndex = -1;
+    railMorph.setAttribute("aria-hidden", "true");
+    railMorph.setAttribute("aria-label", "Notifications");
+  }
 };
 
 // The tab bar: three tabs in an RTL island, the selected one wears the ink
@@ -430,6 +441,11 @@ const neckFrame = (now: number) => {
   const trght = tr.right - rr.left;
   const seamX = mr.right - rr.left; // morph's right cap, rail space
   const tabVis = getComputedStyle(railTabsHost).visibility === "visible";
+  // calm parks the melted bell's cap exactly ON the tab pill's cap (gap 0),
+  // which the waist formula below would read as a full bridge — the bell's
+  // own visibility is what says there is nothing left to bridge.
+  const morphVis =
+    getComputedStyle(railMorph).visibility === "visible" && mr.width > 1;
   // Regime 1 — metaball bridge: the caps are apart (or nearly), the waist
   // thins with the gap and pinches off exactly at the 10px resting gap.
   // Metaball falloff: the waist swells to full height (48px) as the caps
@@ -437,13 +453,13 @@ const neckFrame = (now: number) => {
   // lives only inside the motion; both resting states stay neckless.
   const sep = gap + 0.5 * rise;
   const wBridge = 48 * Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.35);
-  const bridge = tabVis && wBridge > 0.75 && gap + 52 > 1;
+  const bridge = morphVis && tabVis && wBridge > 0.75 && gap + 52 > 1;
   // Regime 2 — wet seam: the caps overlap, so the junction is the vertical
   // seam where the morph's right cap sweeps across the tab pill. The neck
   // straddles that seam at full height — the fused liquid body — from the
   // fusion snap until the morph has swallowed the pill (or it parks).
   const straddle =
-    tabVis && gap < 0 && rise > 1.5 && seamX > tl + 2 && seamX < trght - 16;
+    morphVis && tabVis && gap < 0 && rise > 1.5 && seamX > tl + 2 && seamX < trght - 16;
   // Visibility is pure geometry: at rest the waist is zero, so both
   // resting states stay neckless and the loop parks itself.
   const show = bridge || straddle;

@@ -181,3 +181,31 @@ shows it.
    does not support `d` as a style.
 6. https://better-design.com/principles/ui/svg-animation — matching command
    structure requirement; Chromium/Firefox only for CSS `d`.
+
+## 8. Addendum 2026-11-17 — the rail is notification-driven
+
+The state machine was re-cut per review: the rail no longer rests as a
+labelled pill. `data-state="calm"` (zero notifications) is the tab pill
+alone, centred in the shell, in its own shape; `data-state="alert"`
+(badge > 0) is the bell button plus the pill, badge on the bell. The
+header switch simulates mail arriving (on) and cleared (off) and stays
+the only writer.
+
+Geometry of the melt: the bell collapses by `width: 56px -> 0` while
+`margin-left: 0 -> 33px` carries its right cap to the pill's left cap,
+so the neck's bridge regime sees the cap gap pinch 10px -> 0 instead of
+stretching; the pill rides the 33px re-centring on `left` (a layout
+property — transforms on glass hosts remain off-limits, §8 of the
+how-it-works note), and its glass cover rides with it (cover-tabs drift
+stayed 0 across both directions). Because calm parks the melted cap
+exactly ON the pill cap (gap 0), the neck driver gained a
+`morphVis && mr.width > 1` guard: without it the waist formula reads a
+full bridge at the calm rest and the neck would persist there.
+
+Verified: ghostAE 0 (calm pixel-identical across a full alert+calm
+cycle), both rests neckless, neck live 16-17 frames per direction with
+the 26px tuck holding inside a 3-frame recorder-lag window on BOTH caps
+(the pill travels now, so the rig's tabs read lags a tick exactly like
+the morph's), cover-tabs drift 0, morph width 0<->56 plus spring
+overshoot, badge scale 0<->1 with the bell unfocusable and aria-hidden
+in calm.
