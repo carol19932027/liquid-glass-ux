@@ -428,6 +428,29 @@ let neckMode: "live" | "fade" | "off" = "off";
 let neckStill = 0;
 let neckLastGap = NaN;
 let neckLastRise = NaN;
+let neckLive: { x1: number; x2: number; w: number; rise: number } | null = null;
+
+// The neck silhouette: full-height caps at x1/x2 (tucked under the two
+// glass caps), a waist of w at the middle, and a left edge of half-height
+// eL — so a fading thread can retract its exposed edge instead of
+// holding it in open space.
+const neckPath = (x1: number, x2: number, w: number, rise: number, eL: number) => {
+  const yLt = +(28 - eL).toFixed(1);
+  const yLb = +(28 + eL).toFixed(1);
+  const yRt = +(rise + 6).toFixed(1);
+  const yRb = +(rise + 50).toFixed(1);
+  const mx = (x1 + x2) / 2;
+  const yc = 28 + rise / 2;
+  const yT = +(yc - w / 2).toFixed(1);
+  const yB = +(yc + w / 2).toFixed(1);
+  const q = (n: number) => +n.toFixed(1);
+  return (
+    `M ${x1} ${yLt} C ${q(x1 + (mx - x1) / 2)} ${yLt}, ${q(mx)} ${q(yLt + (yT - yLt) / 2)}, ${q(mx)} ${yT} ` +
+    `C ${q(mx)} ${q(yRt + (yT - yRt) / 2)}, ${q(x2 - (x2 - mx) / 2)} ${yRt}, ${x2} ${yRt} ` +
+    `L ${x2} ${yRb} C ${q(x2 - (x2 - mx) / 2)} ${yRb}, ${q(mx)} ${q(yRb + (yB - yRb) / 2)}, ${q(mx)} ${yB} ` +
+    `C ${q(mx)} ${q(yLb + (yB - yLb) / 2)}, ${q(x1 + (mx - x1) / 2)} ${yLb}, ${x1} ${yLb} Z`
+  );
+};
 
 const neckFrame = (now: number) => {
   neckReq = 0;
@@ -437,9 +460,6 @@ const neckFrame = (now: number) => {
   const tr = railTabsHost.getBoundingClientRect();
   const gap = tr.left - mr.right; // <0 while the caps still overlap
   const rise = tr.top - rr.top; // 0 in the slot, ~24 parked below
-  const tl = tr.left - rr.left;
-  const trght = tr.right - rr.left;
-  const seamX = mr.right - rr.left; // morph's right cap, rail space
   const tabVis = getComputedStyle(railTabsHost).visibility === "visible";
   // calm parks the melted bell's cap exactly ON the tab pill's cap (gap 0),
   // which the waist formula below would read as a full bridge — the bell's
@@ -452,17 +472,31 @@ const neckFrame = (now: number) => {
   // meet and pinches to zero exactly at the 10px resting gap — the neck
   // lives only inside the motion; both resting states stay neckless.
   const sep = gap + 0.5 * rise;
-  const wBridge = 48 * Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.35);
-  const bridge = morphVis && tabVis && wBridge > 0.75 && gap + 52 > 1;
-  // Regime 2 — wet seam: the caps overlap, so the junction is the vertical
-  // seam where the morph's right cap sweeps across the tab pill. The neck
-  // straddles that seam at full height — the fused liquid body — from the
-  // fusion snap until the morph has swallowed the pill (or it parks).
-  const straddle =
-    morphVis && tabVis && gap < 0 && rise > 1.5 && seamX > tl + 2 && seamX < trght - 16;
+  // exponent 1.25 (was 1.35): the thread stays fatter while the caps are
+  // still close, so the melt reads as one liquid body pinching off, not
+  // as a hairline cracking between two solids
+  // capPresence: the thread's left anchor IS the bell's cap. The 1.85
+  // spring closes the gap in the first ~150ms while the bell still has
+  // ~3px of width left, so without this the waist parks at full height
+  // over the pill cap until the visibility flip — a glass slab, not a
+  // melt. The waist now dies with the cap it hangs from.
+  const capPresence = Math.min(1, mr.width / 24);
+  const wBridge =
+    48 *
+    Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.25) *
+    Math.pow(capPresence, 0.8);
+  // and it only lives while the bell cap exists to tuck its left edge
+  // under: past ~35% cap presence the 26px tuck edge would stand exposed
+  // in open space as a bowtie ghost; the melt-away fade then dissolves
+  // the last drawn thread instead
+  const bridge =
+    morphVis && tabVis && capPresence > 0.35 && wBridge > 0.75 && gap + 52 > 1;
+  // (The old wet-seam straddle regime died with the rising tab pill:
+  // rise is always 0 in this machine, so the caps can no longer overlap
+  // mid-flight — the single spine keeps the gap monotone.)
   // Visibility is pure geometry: at rest the waist is zero, so both
   // resting states stay neckless and the loop parks itself.
-  const show = bridge || straddle;
+  const show = bridge;
   // Rest detection: ~20 identical cap reads mean the morph has settled, so
   // the loop can stop — the last drawn neck stays as a persisted style.
   const settled = Math.abs(gap - neckLastGap) < 0.5 && Math.abs(rise - neckLastRise) < 0.5;
@@ -472,28 +506,14 @@ const neckFrame = (now: number) => {
   if (show) {
     // 26px tuck: the concave fillets flare wide under the caps, like the
     // reference's deep pinch, and the seams stay hidden under their glass.
-    const x1 = +((straddle ? seamX : mr.right - rr.left) - 26).toFixed(1);
-    const x2 = +((straddle ? seamX : tr.left - rr.left) + 26).toFixed(1);
+    const x1 = +(mr.right - rr.left - 26).toFixed(1);
+    const x2 = +(tr.left - rr.left + 26).toFixed(1);
     // Viewport-space caps as written, so the verify rig can check the tuck
     // against the exact rects this frame used (its own read lags by one).
     const x1v = +(mr.right - 26).toFixed(1);
-    const x2v = +((straddle ? mr.right : tr.left) + 26).toFixed(1);
-    const w = straddle ? 48 : wBridge;
-    const yLt = 6;
-    const yLb = 50;
-    const yRt = +(rise + 6).toFixed(1);
-    const yRb = +(rise + 50).toFixed(1);
-    const mx = (x1 + x2) / 2;
-    const yc = 28 + rise / 2;
-    const yT = +(yc - w / 2).toFixed(1);
-    const yB = +(yc + w / 2).toFixed(1);
-    const q = (n: number) => +n.toFixed(1);
-    const d =
-      `M ${x1} ${yLt} C ${q(x1 + (mx - x1) / 2)} ${yLt}, ${q(mx)} ${q(yLt + (yT - yLt) / 2)}, ${q(mx)} ${yT} ` +
-      `C ${q(mx)} ${q(yRt + (yT - yRt) / 2)}, ${q(x2 - (x2 - mx) / 2)} ${yRt}, ${x2} ${yRt} ` +
-      `L ${x2} ${yRb} C ${q(x2 - (x2 - mx) / 2)} ${yRb}, ${q(mx)} ${q(yRb + (yB - yRb) / 2)}, ${q(mx)} ${yB} ` +
-      `C ${q(mx)} ${q(yLb + (yB - yLb) / 2)}, ${q(x1 + (mx - x1) / 2)} ${yLb}, ${x1} ${yLb} Z`;
-    railNeck.style.clipPath = `path("${d}")`;
+    const x2v = +(tr.left + 26).toFixed(1);
+    neckLive = { x1, x2, w: wBridge, rise };
+    railNeck.style.clipPath = `path("${neckPath(x1, x2, wBridge, rise, 22)}")`;
     railNeck.style.visibility = "visible";
     railNeck.style.opacity = "1";
     railNeck.dataset.phase = "live";
@@ -510,7 +530,14 @@ const neckFrame = (now: number) => {
     }
     if (neckMode === "fade") {
       const k = (now - neckHideStart) / NECK_FADE;
-      if (k < 1 && railNeck.style.clipPath) {
+      if (k < 1 && neckLive) {
+        // Retract while dimming: the exposed left edge walks toward the
+        // seam and the waist thins, so the thread is seen sucked into the
+        // pill cap instead of holding a bowtie ghost in open space.
+        const g = neckLive;
+        const x1k = +(g.x1 + ((g.x1 + g.x2) / 2 - g.x1) * k * 0.7).toFixed(1);
+        railNeck.style.clipPath =
+          `path("${neckPath(x1k, g.x2, g.w * (1 - k), g.rise, 22 * (1 - k))}")`;
         railNeck.style.opacity = (1 - k).toFixed(2);
         railNeck.style.visibility = "visible";
         railNeck.dataset.phase = "fade";

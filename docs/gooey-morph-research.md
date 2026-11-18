@@ -209,3 +209,42 @@ the 26px tuck holding inside a 3-frame recorder-lag window on BOTH caps
 the morph's), cover-tabs drift 0, morph width 0<->56 plus spring
 overshoot, badge scale 0<->1 with the bell unfocusable and aria-hidden
 in calm.
+
+## 9. Addendum 2026-11-16 — polish pass on the morph transition
+
+$impeccable polish on the navigation morph (engine unavailable in this
+sandbox; the pass ran by hand against the frozen frame strips). Defects
+the strips showed and what fixed them:
+
+- **Two spines.** The melt ran 0.58s/1.85 and the pill ride 0.54s/1.92;
+  the easing mismatch dipped the cap gap negative mid-flight (a
+  one-frame full-bridge flash). The ride now shares the melt's duration
+  and curve, so gap(t) = 10px * (1 - ease(t)) exactly.
+- **Story order.** The badge popped at t=0 on top of an amorphous blob
+  and the bell glyph arrived late from open sea. The badge pop is
+  delayed to 0.28s (the button exists first); the glyph rides the seam
+  both ways — enters from the pill cap (+20px -> 0), and in calm is
+  absorbed back into it (+16px) so the melt reads as liquid pouring
+  into the navigation, never an empty slab sinking.
+- **The slab.** Mid-melt the button is narrower than tall, and the
+  glass library's scalar radius clamp leaves straight flanks. The host
+  now wears elliptical caps (border-radius: 50% / 28px, !important over
+  the library's mount-time inline radius); underlay inherits and the
+  cover copies the computed value on every sync pass, so every
+  intermediate pose is a liquid egg.
+- **The parked sheet.** The 1.85 spring closes the cap gap in ~150ms
+  while the bell still has ~3px of width, so the neck's waist parked at
+  full height over the pill cap until the visibility flip. The waist is
+  now scaled by capPresence (bell width / 24), the bridge only lives
+  above 35% cap presence (past that the 26px tuck edge stands exposed
+  as a bowtie ghost), and the melt-away fade RETRACTS the last path —
+  exposed edge walking to the seam, waist thinning — instead of
+  holding it. The dead wet-seam straddle regime (rise is always 0 now)
+  is gone with it.
+- **States.** The bell glyph carries hover (1.07) and press (0.86)
+  since a transform on the glass host is off-limits; the host grows a
+  :focus-visible ring.
+
+Verified after the pass: ghostAE 0, both rests neckless, cover-tabs
+drift 0, neck live 12-13 frames per direction, 390x844 fits with the
+badge intact, zero console errors, tsc/build/guards clean.
