@@ -215,9 +215,6 @@ createLiquidGlass(element, { radius: 30 });</code></pre>
          the glass library promotes `main` into its own compositor layer
          (will-change: transform), which makes it a backdrop root — a fixed
          glass inside it would lose the page canvas from its backdrop. -->
-    <!-- impeccable-variants-start ios27tabbar -->
-    <div data-impeccable-variants="ios27tabbar" data-impeccable-variant-count="4" style="display: contents">
-      <div data-impeccable-variant="original">
     <nav class="rail" data-state="label" aria-label="Navigation">
       <!-- The liquid neck: a gooey bridge between the bell's right cap and
            the tab pill's left cap, painted UNDER both hosts so its seams
@@ -240,72 +237,6 @@ createLiquidGlass(element, { radius: 30 });</code></pre>
         <button class="rail-tab" type="button" role="tab" style="--i:2" aria-selected="false" tabindex="-1"><span>دستیار</span></button>
       </span>
     </nav>
-      </div>
-      <!-- Variants: insert below this line -->
-      <style data-impeccable-css="ios27tabbar">
-        @import "/components/ios-tokens.css";
-      </style>
-      <div
-        data-impeccable-variant="1"
-        data-impeccable-variant-label="V1 کپسول شناور"
-        data-fa="V1 کپسول شناور"
-        data-en="V1 floating capsule"
-        style="display: none"
-        data-impeccable-params='[
-          {"id":"blur","kind":"range","min":4,"max":28,"step":1,"default":18,"label":"Blur","labelFa":"محو"},
-          {"id":"intensity","kind":"range","min":0,"max":1,"step":0.05,"default":0.5,"label":"Glass intensity","labelFa":"شدت شیشه"},
-          {"id":"specular","kind":"range","min":0,"max":1,"step":0.05,"default":1,"label":"Specular rim","labelFa":"لبهٔ specular"},
-          {"id":"radius","kind":"range","min":18,"max":34,"step":1,"default":28,"label":"Corner radius","labelFa":"گوشه"}
-        ]'
-      >
-        <ios-tab-bar look="capsule"></ios-tab-bar>
-      </div>
-      <div
-        data-impeccable-variant="2"
-        data-impeccable-variant-label="V2 نوار لبه‌به‌لبه"
-        data-fa="V2 نوار لبه‌به‌لبه"
-        data-en="V2 edge-to-edge band"
-        style="display: none"
-        data-impeccable-params='[
-          {"id":"blur","kind":"range","min":4,"max":28,"step":1,"default":18,"label":"Blur","labelFa":"محو"},
-          {"id":"intensity","kind":"range","min":0,"max":1,"step":0.05,"default":0.5,"label":"Glass intensity","labelFa":"شدت شیشه"},
-          {"id":"specular","kind":"range","min":0,"max":1,"step":0.05,"default":1,"label":"Specular rim","labelFa":"لبهٔ specular"}
-        ]'
-      >
-        <ios-tab-bar look="band"></ios-tab-bar>
-      </div>
-      <div
-        data-impeccable-variant="3"
-        data-impeccable-variant-label="V3 کپسول + جستجو"
-        data-fa="V3 کپسول + جستجو"
-        data-en="V3 capsule + search"
-        style="display: none"
-        data-impeccable-params='[
-          {"id":"blur","kind":"range","min":4,"max":28,"step":1,"default":18,"label":"Blur","labelFa":"محو"},
-          {"id":"intensity","kind":"range","min":0,"max":1,"step":0.05,"default":0.5,"label":"Glass intensity","labelFa":"شدت شیشه"},
-          {"id":"specular","kind":"range","min":0,"max":1,"step":0.05,"default":1,"label":"Specular rim","labelFa":"لبهٔ specular"},
-          {"id":"radius","kind":"range","min":18,"max":34,"step":1,"default":28,"label":"Corner radius","labelFa":"گوشه"}
-        ]'
-      >
-        <ios-tab-bar look="search"></ios-tab-bar>
-      </div>
-      <div
-        data-impeccable-variant="4"
-        data-impeccable-variant-label="V4 داوک فشرده"
-        data-fa="V4 داوک فشرده"
-        data-en="V4 compact dock"
-        style="display: none"
-        data-impeccable-params='[
-          {"id":"blur","kind":"range","min":4,"max":28,"step":1,"default":18,"label":"Blur","labelFa":"محو"},
-          {"id":"intensity","kind":"range","min":0,"max":1,"step":0.05,"default":0.5,"label":"Glass intensity","labelFa":"شدت شیشه"},
-          {"id":"specular","kind":"range","min":0,"max":1,"step":0.05,"default":1,"label":"Specular rim","labelFa":"لبهٔ specular"},
-          {"id":"radius","kind":"range","min":18,"max":34,"step":1,"default":24,"label":"Corner radius","labelFa":"گوشه"}
-        ]'
-      >
-        <ios-tab-bar look="dock"></ios-tab-bar>
-      </div>
-    </div>
-    <!-- impeccable-variants-end ios27tabbar -->
 
     <footer class="footer dark">
       <span>Study 001 by <a class="footer-nordify" href="https://nordify.io">Nordify<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4.5 11.5l7-7M5.5 4.5h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></a></span>
@@ -313,14 +244,5 @@ createLiquidGlass(element, { radius: 30 });</code></pre>
     </footer>
 
     <div class="glass" aria-hidden="true"></div>
-
-    <!-- impeccable-live-inject ios27tabbar: session edit written by /impeccable
-         live (the engine's live-inject step, done by hand here because the
-         engine binary cannot be downloaded in this sandbox). Removed again on
-         live cleanup. -->
-    <script type="module">
-      import "/components/ios-tab-bar.js";
-      import "/.impeccable/live/toolbar-shim.js";
-    </script>
   </body>
 </html>

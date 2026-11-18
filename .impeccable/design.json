@@ -20,8 +20,7 @@
     {
       "native": "Tab bar",
       "element": "ios-tab-bar",
-      "status": "live",
-      "showcase": "components/demo.html via impeccable live toolbar (shim)",
+      "status": "built",
       "variants": [
         "capsule",
         "band",
@@ -37,7 +36,8 @@
       "locales": [
         "fa-RTL",
         "en-LTR"
-      ]
+      ],
+      "note": "live session ios27tabbar closed 2026-11-17 at user request; library lives in components/"
     },
     {
       "native": "Navigation bar",
