@@ -102,13 +102,11 @@ const startRecorder = () =>
     const tabs = document.querySelector(".rail-tabs");
     const cover = document.querySelector(".rail-tabs + .lg-cover");
     const morph = document.querySelector(".rail-morph");
-    const neck = document.querySelector(".rail-neck");
     window.__rec = { t0: performance.now(), frames: [] };
     const tick = () => {
       const rt = tabs.getBoundingClientRect();
       const rc = cover.getBoundingClientRect();
       const rm = morph.getBoundingClientRect();
-      const sp = (neck.dataset.span || "").split(",").map(Number);
       window.__rec.frames.push({
         t: +(performance.now() - window.__rec.t0).toFixed(1),
         tabsLeft: +rt.left.toFixed(1),
@@ -120,15 +118,9 @@ const startRecorder = () =>
         tabsVis: getComputedStyle(tabs).visibility,
         morphW: +rm.width.toFixed(1),
         morphR: +rm.right.toFixed(1),
-        neckVis: getComputedStyle(neck).visibility,
-        neckPhase: neck.dataset.phase || "",
-        // as written by the driver: neck caps + the rects that frame used
-        neckL: sp.length >= 4 ? sp[0] : null,
-        neckR: sp.length >= 4 ? sp[1] : null,
-        neckTuckL: sp.length >= 5 ? +sp[4] : 26,
-        neckW: sp.length >= 6 ? +sp[5] : null,
-        neckMorphR: sp.length >= 4 ? +sp[2] : null,
-        neckTabsL: sp.length >= 4 ? +sp[3] : null,
+        morphVis: getComputedStyle(morph).visibility,
+        // cap gap: negative while the bell's cap is INSIDE the pill's
+        gap: +(rt.left - rm.right).toFixed(1),
       });
       if (performance.now() - window.__rec.t0 < 2200) requestAnimationFrame(tick);
     };
@@ -181,59 +173,41 @@ report0.calmAgainBadge = await badgeState();
 if (report0.calmAgainBadge.morphVis !== "hidden") problems.push("calm again: bell still visible");
 await page.screenshot({ path: shot("03-rail-calm-again.png"), clip });
 
-// --- 3b. the liquid neck: present mid-morph, absent at rest, caps tucked ---
-// The neck is a sibling of the hosts with its own backdrop-filter, so the
-// rail and both hosts must stay filter-free, and every visible neck frame
-// must keep its 26px tuck under the cap it bridges from (bridge regime:
-// morph.right -> tabs.left; wet-seam regime: straddling morph.right).
+// --- 3b. the fusion is optical: no third paint, hosts filter-free, and
+// the two glasses actually inter-penetrate mid-flight (stacked backdrop
+// filters = denser liquid at the junction), parting to the resting gap.
+const noNeck = await page.evaluate(() => !document.querySelector(".rail-neck"));
+if (!noNeck) problems.push("neck: a neck element still exists");
 const hostFiltersClean = await page.evaluate(() =>
   [".rail", ".rail-morph", ".rail-tabs"].every((s) => {
     const c = getComputedStyle(document.querySelector(s));
     return c.filter === "none" && (c.backdropFilter === "none" || c.backdropFilter === "");
   })
 );
-if (!hostFiltersClean) problems.push("neck: filter/backdrop-filter on rail or a host");
+if (!hostFiltersClean) problems.push("fusion: filter/backdrop-filter on rail or a host");
 for (const [dir, fr] of [
   ["open", openFrames],
   ["close", closeFrames],
 ]) {
-  // both resting states stay neckless: the neck lives only in the motion
-  if (fr[0]?.neckVis !== "hidden" || fr.at(-1)?.neckVis !== "hidden")
-    problems.push(`neck: ${dir} resting state is not neckless`);
-  const vis = fr.filter((f) => f.neckVis === "visible");
-  if (!vis.length) problems.push(`neck: ${dir} never visible mid-morph`);
-  // fade frames hold the last live path on purpose (melt-away), so the
-  // tuck/liveness math only applies while the driver writes fresh rects
-  const bad = vis.filter((f) => f.neckPhase === "live").filter((f) => {
-    const i = fr.indexOf(f);
-    // the driver's rects may lag this recorder by one rAF tick (software
-    // rasterizers stretch a tick to ~60ms), so accept any morph edge the
-    // rail actually had within the last three frames
-    const win = fr.slice(Math.max(0, i - 2), i + 1).map((g) => g.morphR);
-    const live = f.neckMorphR >= Math.min(...win) - 0.5 && f.neckMorphR <= Math.max(...win) + 0.5;
-    // the tab pill now travels (the re-centring ride), so the driver's
-    // tabs read can lag this recorder by a tick exactly like morph's
-    const winT = fr.slice(Math.max(0, i - 2), i + 1).map((g) => g.tabsLeft);
-    const tabsLive = f.neckTabsL >= Math.min(...winT) - 0.5 && f.neckTabsL <= Math.max(...winT) + 0.5;
-    return !(
-        Math.abs(f.neckL - (f.neckMorphR - f.neckTuckL)) <= 0.2 &&
-        f.neckTuckL <= 26.05 &&
-        (f.neckW >= 48
-          ? Math.abs(f.neckTuckL - 26) <= 0.2
-          : Math.abs(f.neckTuckL - Math.min(26, f.neckW * 0.45 + 2)) <= 0.2) &&
-        (Math.abs(f.neckR - (f.neckTabsL + 26)) <= 0.2 ||
-          Math.abs(f.neckR - (f.neckMorphR + 26)) <= 0.2) &&
-      live &&
-      tabsLive
-    );
-  });
-  if (bad.length)
-    problems.push(
-      `neck: ${dir} cap tuck off in ${bad.length} frames, e.g. ${JSON.stringify(bad[0])}`
-    );
+  const gaps = fr.map((f) => f.gap);
+  const penetration = Math.min(...gaps);
+  // liquid contact: the bell cap must enter the pill cap mid-flight
+  // (negative gap), but stay inside the pill's 28px cap zone — deeper
+  // and the droplet would occlude the first tab instead of merging
+  // with the cap
+  if (penetration > -2)
+    problems.push(`fusion: ${dir} caps never inter-penetrate (min gap ${penetration})`);
+  if (penetration < -22)
+    problems.push(`fusion: ${dir} penetration too deep (${penetration})`);
+  const last = fr.at(-1);
+  if (dir === "open") {
+    if (Math.abs(last.gap - 10) > 0.6) problems.push(`fusion: open rest gap ${last.gap}`);
+  } else if (last.morphVis !== "hidden" || last.morphW > 0.5) {
+    problems.push(`fusion: close rest still shows the bell (${last.morphW}px)`);
+  }
 }
 
-// --- 3c. reduced motion: the neck loop must never run ----------------------
+// --- 3c. reduced motion: the flip is instant, nothing travels -----------
 await page.emulateMedia({ reducedMotion: "reduce" });
 await startRecorder();
 await page.click(".morph-switch");
@@ -241,8 +215,10 @@ await page.waitForTimeout(700);
 const prmFrames = await collect();
 await page.emulateMedia({ reducedMotion: null });
 await page.waitForTimeout(900);
-if (prmFrames.some((f) => f.neckVis === "visible"))
-  problems.push("neck: visible under prefers-reduced-motion");
+// the flip itself still happens under PRM (0 -> 56 in 1ms); what must
+// not exist is any INTERMEDIATE width, i.e. visible travel
+if (prmFrames.some((f) => f.morphW > 1 && f.morphW < 55))
+  problems.push("prm: morph still travels under prefers-reduced-motion");
 
 // --- 4. ghost diff: calm again must be pixel-identical to calm ------------
 const ghostAE = pixelDiff(shot("01-rail-calm.png"), shot("03-rail-calm-again.png"), shot("ghost-diff.png"));
@@ -267,10 +243,9 @@ const analyze = (frames) => {
     tabsTopMax: Math.max(...frames.map((f) => f.tabsTop)),
     visStart: frames[0]?.tabsVis,
     visEnd: frames.at(-1)?.tabsVis,
-    neckVisibleFrames: frames.filter((f) => f.neckVis === "visible").length,
-    neckFadeFrames: frames.filter((f) => f.neckPhase === "fade").length,
-    neckAtStart: frames[0]?.neckVis,
-    neckAtEnd: frames.at(-1)?.neckVis,
+    gapMin: Math.min(...frames.map((f) => f.gap)),
+    gapEnd: frames.at(-1)?.gap,
+    morphVisEnd: frames.at(-1)?.morphVis,
   };
 };
 

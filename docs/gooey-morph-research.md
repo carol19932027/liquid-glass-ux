@@ -274,3 +274,31 @@ min(26, w*0.45+2) below it.
 Verified: ghostAE 0, rests neckless, drift 0, 12-14 neck frames per
 direction with the scaled tuck holding in every live frame, strips
 clean at 60/120ms in both directions.
+
+## 11. Addendum 2026-11-16 — the neck is retired; fusion is optical
+
+User verdict: whatever the thread does, it visibly is not part of the
+two elements. So there is no third paint any more: `.rail-neck`, its
+driver, its clip-path math and its rig assertions are gone. The morph
+now fuses by OPTICAL OVERLAP — the bell's cap rides a few px inside
+the pill's cap mid-flight, and two stacked backdrop-filters (bell z2
+over pill z0, one-way sampling, safe because reflect:false removed the
+overhanging reflection layer) make the junction denser liquid. The
+penetration is choreographed to stay in the droplet phase and inside
+the pill's 28px cap zone, so no tab is ever occluded:
+
+- melt: width collapses early-middle at the seam, margin-left springs
+  ahead with a late overshoot, the pill slides in on a dipping spring;
+  contact (-12px) happens once the bell is a droplet — absorption
+- emerge: width swells a beat ahead of the margin spring while the
+  pill's departure is front-loaded; contact (-18px) while the droplet
+  is still small — division
+- a wet rim pulse on each host's own edge layers was tried and
+  REJECTED: the filled animation left the cover's copied rim custom
+  property stuck at a mid value, breaking pixel-identical rests
+  (ghostAE 12376). Fusion stays purely geometric+optical.
+
+Rig: neck assertions replaced by gap assertions — caps must
+inter-penetrate (min gap < -2), stay shallower than -22 (cap zone),
+part to exactly 10px at the alert rest, and the calm rest must show no
+bell; reduced-motion asserts no intermediate width (instant flip).

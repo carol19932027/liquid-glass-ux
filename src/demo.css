@@ -683,29 +683,6 @@ html.end-dark .rail {
   position: relative;
 }
 
-/* The liquid neck: clipped to a catenoid path per frame by main.ts while
-   the morph runs, hidden otherwise, so both resting states stay pixel-
-   identical to a neckless rail. It carries its own backdrop-filter —
-   legal because it CONTAINS no glass host (the pitfalls list forbids
-   filters on their ancestors, not on siblings) — plus an ink tint that
-   follows the one-step html.end-dark switch like everything else here. */
-.rail-neck {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  visibility: hidden;
-  background:
-    linear-gradient(
-      rgb(255 255 255 / 0.3),
-      rgb(255 255 255 / 0.12) 55%,
-      rgb(255 255 255 / 0.24)
-    ),
-    rgb(255 255 255 / 0.3);
-  -webkit-backdrop-filter: blur(2px) saturate(1.2);
-  backdrop-filter: blur(2px) saturate(1.2);
-}
-
 /* Host 1: the bell button. alert is its base shape (56px round, in flow at
    the shell's left); calm melts it into the tab pill's left cap — width to
    zero while margin-left carries its right cap to the seam, so the neck
@@ -727,9 +704,12 @@ html.end-dark .rail {
      radius; the underlay inherits and the cover copies the computed
      value on each sync pass. */
   border-radius: 50% / calc(var(--btn) / 2) !important;
+  /* emerge: the width swells a beat ahead of the margin-left spring,
+     so the droplet's right cap stays a few px inside the pill cap
+     while it exits, then parts to the 10px resting gap. */
   transition:
-    width 0.58s cubic-bezier(0.3, 1.85, 0.45, 1),
-    margin-left 0.58s cubic-bezier(0.3, 1.85, 0.45, 1);
+    width 0.58s cubic-bezier(0.45, 0.35, 0.3, 1),
+    margin-left 0.58s cubic-bezier(0.45, 0.05, 0.3, 1);
 }
 
 .rail-morph + .lg-cover {
@@ -740,17 +720,27 @@ html.end-dark .rail {
   width: 0;
   margin-left: calc((var(--rail-w) - var(--pill)) / 2);
   visibility: hidden;
+  /* melt: margin-left springs ahead while the width collapses on an
+     early-middle curve, so the bell's right cap rides a few px INSIDE
+     the pill's left cap for the middle of the flight — two stacked
+     backdrop-filters, i.e. denser liquid at the junction, is the whole
+     fusion effect; no third element paints it. The shell only flips
+     visibility once the width is truly gone (~.5s). */
+  /* melt: the width collapses early-middle AT THE SEAM while the pill
+     slides in on a dipping spring; only once the bell is a droplet does
+     the margin's late overshoot dip its cap a few px INTO the pill cap —
+     absorption, not collision. Stacked backdrop-filters at that contact
+     are the whole fusion effect; no third element paints it. */
   transition:
-    width 0.58s cubic-bezier(0.3, 1.85, 0.45, 1),
-    margin-left 0.58s cubic-bezier(0.3, 1.85, 0.45, 1),
-    /* the melt is visually done by ~200ms (the spring front-loads it);
-       keeping the 3px host shell alive to 450ms only left a lit sliver
-       of cover edge-light beside the pill */
-    visibility 0s linear 0.26s;
+    width 0.58s cubic-bezier(0.35, 0, 0.25, 1),
+    margin-left 0.58s cubic-bezier(0.5, 0.05, 0.3, 1.25),
+    visibility 0s linear 0.5s;
 }
 
 .rail.rail-armed[data-state="alert"] .rail-morph {
-  animation: rail-nudge-round 0.62s linear both;
+  animation:
+    rail-nudge-round 0.62s linear both,
+    rail-wet-a 0.62s linear both;
 }
 
 @keyframes rail-nudge-round {
@@ -788,14 +778,16 @@ html.end-dark .rail {
 
 .rail[data-state="calm"] .rail-icon {
   opacity: 0;
-  translate: 16px 0;
+  translate: 20px 0;
   scale: 0.6;
   visibility: hidden;
+  /* the glyph rides inside the collapsing body longer now (the width
+     curve is slow-start), and leaves with it, not before it */
   transition:
-    opacity 0.14s cubic-bezier(0.38, 0, 0.24, 1),
-    translate 0.2s cubic-bezier(0.38, 0, 0.24, 1),
-    scale 0.2s cubic-bezier(0.38, 0, 0.24, 1),
-    visibility 0s linear 0.2s;
+    opacity 0.18s cubic-bezier(0.38, 0, 0.24, 1) 0.12s,
+    translate 0.22s cubic-bezier(0.38, 0, 0.24, 1) 0.12s,
+    scale 0.22s cubic-bezier(0.38, 0, 0.24, 1) 0.12s,
+    visibility 0s linear 0.35s;
 }
 
 /* Pointer and keyboard states for the bell: the glyph carries them,
@@ -882,14 +874,16 @@ html.end-dark .rail {
   gap: 6px;
   padding: 0 8px;
   visibility: visible;
-  /* one spine for the whole body: the ride shares the melt's duration
-     and curve, so the cap gap is 10px * (1 - ease(t)) exactly — monotone,
-     no mid-flight overlap flash, one shared overshoot on landing. */
-  transition: left 0.58s cubic-bezier(0.3, 1.85, 0.45, 1);
+  /* emerge: the pill holds its centred pose a beat (slow-start curve)
+     while the droplet grows out of its cap, then slides to the slot. */
+  transition: left 0.58s cubic-bezier(0.3, 0.2, 0.3, 1);
 }
 
 .rail[data-state="calm"] .rail-tabs {
   left: calc((var(--rail-w) - var(--pill)) / 2);
+  /* melt: the pill slides left on a dipping spring — its cap undershoots
+     centre and meets the droplet's cap halfway (the receiving gulp). */
+  transition: left 0.58s cubic-bezier(0.3, 1.6, 0.45, 1);
 }
 
 /* The tab is a plain button whose visible state is carried by children:
