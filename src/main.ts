@@ -428,7 +428,13 @@ let neckMode: "live" | "fade" | "off" = "off";
 let neckStill = 0;
 let neckLastGap = NaN;
 let neckLastRise = NaN;
-let neckLive: { x1: number; x2: number; w: number; rise: number } | null = null;
+let neckLive: {
+  x1: number;
+  x2: number;
+  w: number;
+  rise: number;
+  eL: number;
+} | null = null;
 
 // The neck silhouette: full-height caps at x1/x2 (tucked under the two
 // glass caps), a waist of w at the middle, and a left edge of half-height
@@ -506,19 +512,33 @@ const neckFrame = (now: number) => {
   if (show) {
     // 26px tuck: the concave fillets flare wide under the caps, like the
     // reference's deep pinch, and the seams stay hidden under their glass.
-    const x1 = +(mr.right - rr.left - 26).toFixed(1);
+    // The left tuck and the left edge scale with the bell cap: mid-melt
+    // the cap is a 24px droplet, and a 26px tuck / 44px edge sized for
+    // the full 56px button stood out around it as a square sheet — the
+    // bell looked sliced in half from the left. The right side stays
+    // full: the pill cap never changes size.
+    const tuckL = Math.min(26, mr.width * 0.45 + 2);
+    const eL = 22 * Math.min(1, mr.width / 48);
+    const x1 = +(mr.right - rr.left - tuckL).toFixed(1);
     const x2 = +(tr.left - rr.left + 26).toFixed(1);
     // Viewport-space caps as written, so the verify rig can check the tuck
     // against the exact rects this frame used (its own read lags by one).
-    const x1v = +(mr.right - 26).toFixed(1);
+    const x1v = +(mr.right - tuckL).toFixed(1);
     const x2v = +(tr.left + 26).toFixed(1);
-    neckLive = { x1, x2, w: wBridge, rise };
-    railNeck.style.clipPath = `path("${neckPath(x1, x2, wBridge, rise, 22)}")`;
+    neckLive = { x1, x2, w: wBridge, rise, eL };
+    railNeck.style.clipPath = `path("${neckPath(x1, x2, wBridge, rise, eL)}")`;
     railNeck.style.visibility = "visible";
     railNeck.style.opacity = "1";
     railNeck.dataset.phase = "live";
     neckMode = "live";
-    railNeck.dataset.span = [x1v, x2v, mr.right.toFixed(1), tr.left.toFixed(1)].join(",");
+    railNeck.dataset.span = [
+      x1v,
+      x2v,
+      mr.right.toFixed(1),
+      tr.left.toFixed(1),
+      tuckL.toFixed(1),
+      mr.width.toFixed(1),
+    ].join(",");
   } else {
     // Melt-away: hold the last path and fade it out, so the thread is seen
     // dissolving into the caps instead of blinking out in one frame. Only
@@ -537,7 +557,7 @@ const neckFrame = (now: number) => {
         const g = neckLive;
         const x1k = +(g.x1 + ((g.x1 + g.x2) / 2 - g.x1) * k * 0.7).toFixed(1);
         railNeck.style.clipPath =
-          `path("${neckPath(x1k, g.x2, g.w * (1 - k), g.rise, 22 * (1 - k))}")`;
+          `path("${neckPath(x1k, g.x2, g.w * (1 - k), g.rise, g.eL * (1 - k))}")`;
         railNeck.style.opacity = (1 - k).toFixed(2);
         railNeck.style.visibility = "visible";
         railNeck.dataset.phase = "fade";

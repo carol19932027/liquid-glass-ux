@@ -123,10 +123,12 @@ const startRecorder = () =>
         neckVis: getComputedStyle(neck).visibility,
         neckPhase: neck.dataset.phase || "",
         // as written by the driver: neck caps + the rects that frame used
-        neckL: sp.length === 4 ? sp[0] : null,
-        neckR: sp.length === 4 ? sp[1] : null,
-        neckMorphR: sp.length === 4 ? sp[2] : null,
-        neckTabsL: sp.length === 4 ? sp[3] : null,
+        neckL: sp.length >= 4 ? sp[0] : null,
+        neckR: sp.length >= 4 ? sp[1] : null,
+        neckTuckL: sp.length >= 5 ? +sp[4] : 26,
+        neckW: sp.length >= 6 ? +sp[5] : null,
+        neckMorphR: sp.length >= 4 ? +sp[2] : null,
+        neckTabsL: sp.length >= 4 ? +sp[3] : null,
       });
       if (performance.now() - window.__rec.t0 < 2200) requestAnimationFrame(tick);
     };
@@ -214,7 +216,11 @@ for (const [dir, fr] of [
     const winT = fr.slice(Math.max(0, i - 2), i + 1).map((g) => g.tabsLeft);
     const tabsLive = f.neckTabsL >= Math.min(...winT) - 0.5 && f.neckTabsL <= Math.max(...winT) + 0.5;
     return !(
-        Math.abs(f.neckL - (f.neckMorphR - 26)) <= 0.2 &&
+        Math.abs(f.neckL - (f.neckMorphR - f.neckTuckL)) <= 0.2 &&
+        f.neckTuckL <= 26.05 &&
+        (f.neckW >= 48
+          ? Math.abs(f.neckTuckL - 26) <= 0.2
+          : Math.abs(f.neckTuckL - Math.min(26, f.neckW * 0.45 + 2)) <= 0.2) &&
         (Math.abs(f.neckR - (f.neckTabsL + 26)) <= 0.2 ||
           Math.abs(f.neckR - (f.neckMorphR + 26)) <= 0.2) &&
       live &&

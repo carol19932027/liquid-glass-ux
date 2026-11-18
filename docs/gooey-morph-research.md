@@ -248,3 +248,29 @@ the strips showed and what fixed them:
 Verified after the pass: ghostAE 0, both rests neckless, cover-tabs
 drift 0, neck live 12-13 frames per direction, 390x844 fits with the
 badge intact, zero console errors, tsc/build/guards clean.
+
+## 10. Addendum 2026-11-16 — the "half bell" sheet (user-reported)
+
+Report: mid-animation the bell button looks sliced in half from the
+left; guess was overflow hidden. It was not a clip: it was the neck.
+The thread's left tuck (26px) and left edge (44px full height) were
+sized for the full 56px cap; mid-melt the cap is a ~24px droplet, so
+the full-height tuck edge and the fat waist stood out AROUND it as a
+square pale sheet — reading as a straight cut through the button's
+left half. (Debugging note: isolating layers by visibility override
+lies here — the neck driver's rAF re-asserts visibility every frame,
+so frozen-pose hide tests never actually hid it; the pixel evidence
+only makes sense once the driver is read as the paint owner.)
+
+Fix: the left tuck and left edge now scale with the bell cap —
+tuckL = min(26, w*0.45 + 2), eL = 22 * min(1, w/48) — while the right
+side stays full (the pill cap never changes size). The thread now
+pours from a droplet-sized mouth into the pill cap. The verify span
+grew two driver-owned fields (tuckL, morph width) so the rig checks
+the tuck against the exact width the driver used, immune to the
+one-tick recorder lag; the rig asserts tuckL == 26 at full cap and
+min(26, w*0.45+2) below it.
+
+Verified: ghostAE 0, rests neckless, drift 0, 12-14 neck frames per
+direction with the scaled tuck holding in every live frame, strips
+clean at 60/120ms in both directions.
