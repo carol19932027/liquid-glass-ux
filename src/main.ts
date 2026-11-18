@@ -320,13 +320,11 @@ if (!supportsRefraction) {
 }
 
 // --- The morph rail ---------------------------------------------------------
-// Two glass hosts, one data-state, driven by the notification count the
-// switch simulates: alert (badge > 0) is the bell button plus the tab
-// pill; calm (zero mail) keeps the navigation in its own shape and melts
-// ONLY the bell away, into the tab pill's left cap. The switch is the
-// only writer. The bell's own href/focusability follow the state: a live
-// Notifications link in alert, unfocusable and aria-hidden in calm, where
-// there is no button left to tab to.
+// ONE glass body, two states, driven by the notification count the
+// switch simulates: calm (zero mail) is the navigation pill alone with
+// the bell living inside it as an item lens; alert (badge > 0) is the
+// same body divided in two — the bell piece stood out at the shell's
+// left, badge on it. The switch is the only writer of data-state.
 const NOTIFICATIONS = 3; // what the switch's "on" simulates as arrived
 const rail = document.querySelector<HTMLElement>(".rail")!;
 const railTabsHost = document.querySelector<HTMLElement>(".rail-tabs")!;
@@ -347,21 +345,15 @@ for (const host of document.querySelectorAll<HTMLElement>(".rail-host")) {
 const railBadge = document.querySelector<HTMLElement>(".rail-badge")!;
 
 const setRailState = (alert: boolean) => {
+  // the bell is a navigation item in BOTH states — inside the pill as a
+  // lens in calm, divided out as its own piece in alert — so it stays
+  // focusable and linked always; only the badge and the label change
   rail.dataset.state = alert ? "alert" : "calm";
-  railBadge.textContent = String(NOTIFICATIONS);
-  if (alert) {
-    railMorph.href = "#top";
-    railMorph.removeAttribute("tabindex");
-    railMorph.removeAttribute("aria-hidden");
-    railMorph.setAttribute("aria-label", `Notifications, ${NOTIFICATIONS} unread`);
-  } else {
-    // no mail, no button: the bell is melted away, so it must not stay in
-    // the tab order or the accessibility tree
-    railMorph.removeAttribute("href");
-    railMorph.tabIndex = -1;
-    railMorph.setAttribute("aria-hidden", "true");
-    railMorph.setAttribute("aria-label", "Notifications");
-  }
+  railBadge.textContent = alert ? String(NOTIFICATIONS) : "0";
+  railMorph.setAttribute(
+    "aria-label",
+    alert ? `Notifications, ${NOTIFICATIONS} unread` : "Notifications, no unread"
+  );
 };
 
 // The tab bar: three tabs in an RTL island, the selected one wears the ink

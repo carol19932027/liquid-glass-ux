@@ -302,3 +302,37 @@ Rig: neck assertions replaced by gap assertions — caps must
 inter-penetrate (min gap < -2), stay shallower than -22 (cap zone),
 part to exactly 10px at the alert rest, and the calm rest must show no
 bell; reduced-motion asserts no intermediate width (instant flip).
+
+## 12. Addendum 2026-11-16 — the unified one-body rail
+
+User direction: rewrite as ONE integrated piece — the navigation glass
+with the notifications button as one of its ITEMS; when mail arrives
+the glass visually divides in two, the bell piece morphing out through
+the left cap. Implemented:
+
+- calm: a single 290px glass pill; the bell lives inside it as a 44px
+  lens inset 4px from the left cap (stacked glass over the body, the
+  way the selected-tab lens rides it), glyph at 0.9 scale, badge at
+  scale 0. One visible glass body, no seam, no stranger beside it.
+- alert: the same body divided — the lens slides out through the left
+  cap, grows to 56px and stands at the shell's left with the badge;
+  the pill closes to 256px at the right. The crossing is fused by the
+  stacked backdrop-filters (bell z2 over pill z0, one-way sampling).
+- one spine (0.58s, cubic-bezier(0.3,1.85,0.45,1)) drives piece
+  position, piece width, pill position, pill width and the pill's
+  inner padding-left (room for the lens in calm, closed in alert, so
+  the tabs re-centre in whatever body they have) — the gap between the
+  caps is then 10 - 58*ease(t) exactly, monotone by construction.
+- the bell is a real item in both states: always linked, always
+  focusable; only badge and aria-label change with the mail. The
+  visibility flips, the aria-hidden juggling and the nudge animation
+  are gone with the old melted-away semantics.
+- calm geometry sits on integer pixels (290/16/20/44): at half-pixel
+  rests the lens rim's conic mask re-phased between the two calm
+  captures and cost 10 ghost pixels.
+
+Rig: lens-inside assertions at the calm rest (inset 2..10, reach
+40..60, first tab clear by >=2px), monotone cap-gap through both
+directions (settle wiggle exempt), 10px two-piece rest, badge scale
+0<->1, reduced-motion no intermediate width. ghostAE 0, drift 0,
+guards OK.
