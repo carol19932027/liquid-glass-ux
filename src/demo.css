@@ -664,7 +664,6 @@ pre .k {
   --btn: 56px;
   --gap: 10px;
   --pill: 256px;
-  --pill-calm: 290px;
   position: fixed;
   bottom: clamp(16px, 3vh, 28px);
   left: calc(50% - var(--rail-w) / 2);
@@ -679,58 +678,16 @@ html.end-dark .rail {
   color: oklch(0.97 0.004 var(--hue));
 }
 
-/* The glass body and its edge light: two backdrop/mask roots that carry
-   NO content — the metaball lens from src/rail-glass.ts. The silhouette
-   and specular masks plus the displacement map are rewritten per morph
-   frame; the tint rides the ink switch through currentColor. */
-.rail-glass {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(
-      rgb(255 255 255 / 0.3),
-      rgb(255 255 255 / 0.12) 55%,
-      rgb(255 255 255 / 0.24)
-    ),
-    color-mix(in oklab, currentColor 4%, rgb(255 255 255 / 0.3));
-  /* backdrop-filter is set inline from rail-glass.ts: the build's CSS
-     minifier merges/drops it in stylesheets (the same reason the glass
-     library sets every backdrop-filter inline). */
+.rail-host {
+  height: 56px;
+  position: relative;
 }
 
-/* the defs svg is a flex child of the shell: park it out of flow at
-   zero size, exactly like the library's .lg-defs */
-.rail-defs {
-  position: absolute;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.rail-rim {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: linear-gradient(
-    rgb(255 255 255 / 0.85),
-    rgb(255 255 255 / 0.25) 55%,
-    rgb(255 255 255 / 0.6)
-  );
-}
-
-/* Host 1: the notifications button — an ITEM of the navigation, not a
-   stranger beside it. In calm it lives INSIDE the pill as a lens (44px,
-   inset 4px from the pill's left cap, stacked glass over the body the
-   way the selected-tab lens rides it); when mail arrives the one glass
-   body DIVIDES: the lens slides out through the left cap and becomes
-   its own 56px piece at the shell's left, badge and all. Merging back
-   is the same move reversed. The stacked backdrop-filters while the
-   piece crosses the cap are the whole fusion effect — no third paint,
-   no seam: at calm there is exactly one visible glass body. */
+/* Host 1: the bell button. alert is its base shape (56px round, in flow at
+   the shell's left); calm melts it into the tab pill's left cap — width to
+   zero while margin-left carries its right cap to the seam, so the neck
+   bridges a gap that pinches from 10px to 0 instead of stretching. The
+   visibility flip lands late enough for the collapse to read as a melt. */
 .rail-morph {
   display: grid;
   width: var(--btn);
@@ -738,20 +695,58 @@ html.end-dark .rail {
   color: inherit;
   text-decoration: none;
   z-index: 2;
-  position: relative;
-  height: 56px;
-  /* one spine for the whole body: piece position, piece width, pill
-     position, pill width and the tabs' inner padding all share this
-     curve, so the division reads as ONE glass moving, not as several
-     animations racing. */
+  /* Mid-melt the button is narrower than it is tall, and the library's
+     scalar radius clamp (min(r, w/2, h/2), published as --lg-r) then
+     leaves straight vertical flanks — a slab, not a droplet. Elliptical
+     caps (half the width across, half the height down) keep EVERY
+     intermediate pose a liquid egg: circle at 56px, egg below, lens at
+     the last frames. !important beats the library's mount-time inline
+     radius; the underlay inherits and the cover copies the computed
+     value on each sync pass. */
+  border-radius: 50% / calc(var(--btn) / 2) !important;
+  /* emerge: the width swells a beat ahead of the margin-left spring,
+     so the droplet's right cap stays a few px inside the pill cap
+     while it exits, then parts to the 10px resting gap. */
   transition:
-    width 0.58s cubic-bezier(0.3, 1.85, 0.45, 1),
-    margin-left 0.58s cubic-bezier(0.3, 1.85, 0.45, 1);
+    width 0.58s cubic-bezier(0.45, 0.35, 0.3, 1),
+    margin-left 0.58s cubic-bezier(0.45, 0.05, 0.3, 1);
+}
+
+.rail-morph + .lg-cover {
+  z-index: 2;
 }
 
 .rail[data-state="calm"] .rail-morph {
-  width: 44px;
-  margin-left: calc((var(--rail-w) - var(--pill-calm)) / 2 + 4px);
+  width: 0;
+  margin-left: calc((var(--rail-w) - var(--pill)) / 2);
+  visibility: hidden;
+  /* melt: margin-left springs ahead while the width collapses on an
+     early-middle curve, so the bell's right cap rides a few px INSIDE
+     the pill's left cap for the middle of the flight — two stacked
+     backdrop-filters, i.e. denser liquid at the junction, is the whole
+     fusion effect; no third element paints it. The shell only flips
+     visibility once the width is truly gone (~.5s). */
+  /* melt: the width collapses early-middle AT THE SEAM while the pill
+     slides in on a dipping spring; only once the bell is a droplet does
+     the margin's late overshoot dip its cap a few px INTO the pill cap —
+     absorption, not collision. Stacked backdrop-filters at that contact
+     are the whole fusion effect; no third element paints it. */
+  transition:
+    width 0.58s cubic-bezier(0.35, 0, 0.25, 1),
+    margin-left 0.58s cubic-bezier(0.5, 0.05, 0.3, 1.25),
+    visibility 0s linear 0.5s;
+}
+
+.rail.rail-armed[data-state="alert"] .rail-morph {
+  animation:
+    rail-nudge-round 0.62s linear both,
+    rail-wet-a 0.62s linear both;
+}
+
+@keyframes rail-nudge-round {
+  0% { translate: 0 0; animation-timing-function: cubic-bezier(0.38, 0, 0.24, 1); }
+  28% { translate: 20px 0; animation-timing-function: cubic-bezier(0.3, 1.92, 0.45, 1); }
+  100% { translate: 0 0; }
 }
 
 /* The two faces share one grid cell. */
@@ -763,37 +758,36 @@ html.end-dark .rail {
   gap: 8px;
 }
 
-/* The item lens: at calm the bell sits inside the body, and an ink pill
-   under the glyph marks it as one of the navigation's items (the same
-   language as the selected tab's lens); once the piece stands on its
-   own in alert, the glass body is its surface and the ink leaves. */
-.rail-morph::before {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border-radius: 999px;
-  background: color-mix(in oklab, currentColor 13%, transparent);
-  opacity: 0;
-  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.rail[data-state="calm"] .rail-morph::before {
-  opacity: 1;
-}
-
-/* The bell glyph is the item's icon in BOTH states — it never leaves;
-   only the badge comes and goes with the mail. A touch smaller inside
-   the lens, full size once the piece stands on its own. */
+/* The bell face rides the seam, both ways: in alert it emerges FROM the
+   pill's left cap (translate +20px -> 0, .5s spring, opacity .24s from
+   .05s, so the glyph is inside the body while the body is still
+   swelling); in calm it is absorbed back INTO the cap (+16px, .2s blunt
+   ease, visibility flip behind it) so the melt reads as liquid pouring
+   into the navigation, never as an empty slab sinking on its own. */
 .rail-icon {
   opacity: 1;
   translate: 0 0;
   scale: 1;
   visibility: visible;
-  transition: scale 0.5s cubic-bezier(0.3, 1.92, 0.45, 1);
+  transition:
+    opacity 0.24s cubic-bezier(0.3, 1.4, 0.5, 1) 0.05s,
+    translate 0.5s cubic-bezier(0.3, 1.92, 0.45, 1) 0.06s,
+    scale 0.5s cubic-bezier(0.3, 1.92, 0.45, 1) 0.06s,
+    visibility 0s;
 }
 
 .rail[data-state="calm"] .rail-icon {
-  scale: 0.9;
+  opacity: 0;
+  translate: 20px 0;
+  scale: 0.6;
+  visibility: hidden;
+  /* the glyph rides inside the collapsing body longer now (the width
+     curve is slow-start), and leaves with it, not before it */
+  transition:
+    opacity 0.18s cubic-bezier(0.38, 0, 0.24, 1) 0.12s,
+    translate 0.22s cubic-bezier(0.38, 0, 0.24, 1) 0.12s,
+    scale 0.22s cubic-bezier(0.38, 0, 0.24, 1) 0.12s,
+    visibility 0s linear 0.35s;
 }
 
 /* Pointer and keyboard states for the bell: the glyph carries them,
@@ -815,10 +809,14 @@ html.end-dark .rail {
   outline-offset: 3px;
 }
 
-/* The badge is the reason the body divides at all: system red, 18px
-   min, popping in on the alert spring and scaling out in calm. It
-   rides the morph host, so it travels with the piece. */
-.rail-morph .rail-badge {
+/* The badge is the reason the rail splits at all: system red, 18px min,
+   popping in on the alert spring and scaling out in calm. It rides the
+   morph host, so it melts with the bell. */
+/* .rail-host .rail-badge, not .rail-badge: the glass library forces
+   position:relative + z-index:2 on every host child at equal
+   specificity from a later stylesheet, which would drop the badge into
+   the host's grid as a stretched item instead of pinning it. */
+.rail-host .rail-badge {
   position: absolute;
   top: 5px;
   right: 6px;
@@ -846,29 +844,28 @@ html.end-dark .rail {
 .rail[data-state="calm"] .rail-badge {
   scale: 0;
   opacity: 0;
-  /* clearing the mail is the CAUSE of the merge, so the badge leaves
-     first, ahead of the piece itself */
+  /* clearing the mail is the CAUSE of the melt, so the badge leaves
+     first, ahead of the bell itself */
   transition:
     scale 0.18s cubic-bezier(0.38, 0, 0.24, 1),
     opacity 0.12s cubic-bezier(0.38, 0, 0.24, 1);
 }
 
-/* Host 2: the tab pill — the navigation body. In calm it IS the whole
-   rail: one glass, 289px, with the bell lens inside its left cap; in
-   alert it is the piece left behind once the bell divides out (256px
-   at the shell's right). Width, position and the inner padding-left
-   (room for the lens in calm, closed in alert, so the tabs re-centre
-   in whatever body they have) ride the same spine as the bell, all on
-   layout properties — a transform on a glass host is off-limits
-   (HOW-IT-WORKS §8) — and the library follows every frame. The tabs
-   read right to left; dir="rtl" on the host (index.html) makes the
-   first tab the rightmost one. */
+/* Host 2: the tab pill — the navigation itself. It is present in BOTH
+   states, in its own shape: alert parks it right of the bell button
+   (left: btn + gap, the reference's fixed slot); calm re-centres it in
+   the shell once the bell has melted, and it rides that 33px on `left`,
+   a layout property, not transform: a transform on a glass host is
+   off-limits (HOW-IT-WORKS §8), and the library follows layout moves of
+   its host frame by frame until it stands still. Visibility never flips
+   here any more — nothing about the navigation disappears when the mail
+   is cleared. The tabs read right to left; dir="rtl" on the host
+   (index.html) makes the first tab the rightmost one. */
 .rail-tabs {
   position: absolute;
   top: 0;
   left: calc(var(--btn) + var(--gap));
-  z-index: 2;
-  height: 56px;
+  z-index: 0;
   width: var(--pill);
   min-width: 56px;
   display: flex;
@@ -877,16 +874,16 @@ html.end-dark .rail {
   gap: 6px;
   padding: 0 8px;
   visibility: visible;
-  transition:
-    left 0.58s cubic-bezier(0.3, 1.85, 0.45, 1),
-    width 0.58s cubic-bezier(0.3, 1.85, 0.45, 1),
-    padding 0.58s cubic-bezier(0.3, 1.85, 0.45, 1);
+  /* emerge: the pill holds its centred pose a beat (slow-start curve)
+     while the droplet grows out of its cap, then slides to the slot. */
+  transition: left 0.58s cubic-bezier(0.3, 0.2, 0.3, 1);
 }
 
 .rail[data-state="calm"] .rail-tabs {
-  left: calc((var(--rail-w) - var(--pill-calm)) / 2);
-  width: var(--pill-calm);
-  padding-left: 48px;
+  left: calc((var(--rail-w) - var(--pill)) / 2);
+  /* melt: the pill slides left on a dipping spring — its cap undershoots
+     centre and meets the droplet's cap halfway (the receiving gulp). */
+  transition: left 0.58s cubic-bezier(0.3, 1.6, 0.45, 1);
 }
 
 /* The tab is a plain button whose visible state is carried by children:

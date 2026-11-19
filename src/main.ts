@@ -1,5 +1,4 @@
 import { createLiquidGlass, supportsRefraction } from "./glass/liquid-glass";
-import { createRailGlass } from "./rail-glass";
 
 const glass = document.querySelector<HTMLElement>(".glass")!;
 const title = document.querySelector<HTMLElement>("h1")!;
@@ -321,45 +320,48 @@ if (!supportsRefraction) {
 }
 
 // --- The morph rail ---------------------------------------------------------
-// ONE glass body, two states, driven by the notification count the
-// switch simulates: calm (zero mail) is the navigation pill alone with
-// the bell living inside it as an item lens; alert (badge > 0) is the
-// same body divided in two — the bell piece stood out at the shell's
-// left, badge on it. The switch is the only writer of data-state.
+// Two glass hosts, one data-state, driven by the notification count the
+// switch simulates: alert (badge > 0) is the bell button plus the tab
+// pill; calm (zero mail) keeps the navigation in its own shape and melts
+// ONLY the bell away, into the tab pill's left cap. The switch is the
+// only writer. The bell's own href/focusability follow the state: a live
+// Notifications link in alert, unfocusable and aria-hidden in calm, where
+// there is no button left to tab to.
 const NOTIFICATIONS = 3; // what the switch's "on" simulates as arrived
 const rail = document.querySelector<HTMLElement>(".rail")!;
 const railTabsHost = document.querySelector<HTMLElement>(".rail-tabs")!;
 const railMorph = document.querySelector<HTMLAnchorElement>(".rail-morph")!;
 const railSwitch = document.querySelector<HTMLInputElement>("#morph-switch")!;
 
-// The rail's glass is one metaball lens now (src/rail-glass.ts): the
-// silhouette is the smooth union of the bell circle and the pill capsule,
-// read live from the two content spans below, so the division and the
-// merge are the field moving — no per-host glass, no third paint.
-const railGlass = createRailGlass(rail, () => {
-  const rr = rail.getBoundingClientRect();
-  const br = railMorph.getBoundingClientRect();
-  const tr = railTabsHost.getBoundingClientRect();
-  return {
-    bellX: br.left - rr.left + br.width / 2,
-    bellR: Math.max(4, br.width / 2),
-    pillL: tr.left - rr.left,
-    pillR: tr.right - rr.left,
-  };
-});
+for (const host of document.querySelectorAll<HTMLElement>(".rail-host")) {
+  // reflect: false — the reflection layer overhangs its host by `pad` on
+  // every side; two overhanging backdrop roots filtering each other's
+  // pixels invalidate one another every frame and blink the glass out
+  // to near-transparent. Without it the hosts MAY overlap (they do, mid
+  // morph): the stack is one-way — bell z2 over pill z0 — so only the
+  // bell ever samples the other's glass, and that stacked sampling is
+  // exactly the fusion effect.
+  createLiquidGlass(host, { radius: 28, reflect: false });
+}
 
 const railBadge = document.querySelector<HTMLElement>(".rail-badge")!;
 
 const setRailState = (alert: boolean) => {
-  // the bell is a navigation item in BOTH states — inside the pill as a
-  // lens in calm, divided out as its own piece in alert — so it stays
-  // focusable and linked always; only the badge and the label change
   rail.dataset.state = alert ? "alert" : "calm";
-  railBadge.textContent = alert ? String(NOTIFICATIONS) : "0";
-  railMorph.setAttribute(
-    "aria-label",
-    alert ? `Notifications, ${NOTIFICATIONS} unread` : "Notifications, no unread"
-  );
+  railBadge.textContent = String(NOTIFICATIONS);
+  if (alert) {
+    railMorph.href = "#top";
+    railMorph.removeAttribute("tabindex");
+    railMorph.removeAttribute("aria-hidden");
+    railMorph.setAttribute("aria-label", `Notifications, ${NOTIFICATIONS} unread`);
+  } else {
+    // no mail, no button: the bell is melted away, so it must not stay in
+    // the tab order or the accessibility tree
+    railMorph.removeAttribute("href");
+    railMorph.tabIndex = -1;
+    railMorph.setAttribute("aria-hidden", "true");
+    railMorph.setAttribute("aria-label", "Notifications");
+  }
 };
 
 // The tab bar: three tabs in an RTL island, the selected one wears the ink
@@ -401,6 +403,5 @@ railSwitch.addEventListener("change", () => {
   // written once to match the switch's initial position.
   rail.classList.add("rail-armed");
   setRailState(railSwitch.checked);
-  railGlass.start();
 });
 setRailState(railSwitch.checked);

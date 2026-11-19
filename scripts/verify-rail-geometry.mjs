@@ -100,19 +100,23 @@ const clip = {
 const startRecorder = () =>
   page.evaluate(() => {
     const tabs = document.querySelector(".rail-tabs");
+    const cover = document.querySelector(".rail-tabs + .lg-cover");
     const morph = document.querySelector(".rail-morph");
     window.__rec = { t0: performance.now(), frames: [] };
     const tick = () => {
       const rt = tabs.getBoundingClientRect();
+      const rc = cover.getBoundingClientRect();
       const rm = morph.getBoundingClientRect();
       window.__rec.frames.push({
         t: +(performance.now() - window.__rec.t0).toFixed(1),
         tabsLeft: +rt.left.toFixed(1),
         tabsTop: +rt.top.toFixed(1),
         tabsW: +rt.width.toFixed(1),
+        coverLeft: +rc.left.toFixed(1),
+        coverTop: +rc.top.toFixed(1),
+        coverW: +rc.width.toFixed(1),
         tabsVis: getComputedStyle(tabs).visibility,
         morphW: +rm.width.toFixed(1),
-        morphL: +rm.left.toFixed(1),
         morphR: +rm.right.toFixed(1),
         morphVis: getComputedStyle(morph).visibility,
         // cap gap: negative while the bell's cap is INSIDE the pill's
@@ -142,24 +146,8 @@ const badgeState = () =>
 const report0 = {};
 report0.calmBadge = await badgeState();
 if (report0.calmBadge.state !== "calm") problems.push(`initial state ${report0.calmBadge.state}`);
-if (report0.calmBadge.morphVis !== "visible") problems.push("calm: bell item not visible");
-if (!report0.calmBadge.morphHref) problems.push("calm: bell item lost its link");
-report0.calmLens = await page.evaluate(() => {
-  const pill = document.querySelector(".rail-tabs").getBoundingClientRect();
-  const m = document.querySelector(".rail-morph").getBoundingClientRect();
-  const tabLefts = [...document.querySelectorAll(".rail-tab")].map((t) => t.getBoundingClientRect().left);
-  return {
-    inset: +(m.left - pill.left).toFixed(1),
-    reach: +(m.right - pill.left).toFixed(1),
-    tabClear: +(Math.min(...tabLefts) - m.right).toFixed(1),
-  };
-});
-if (!(report0.calmLens.inset >= 2 && report0.calmLens.inset <= 10))
-  problems.push(`calm: lens inset ${report0.calmLens.inset} not inside the pill cap`);
-if (!(report0.calmLens.reach >= 40 && report0.calmLens.reach <= 60))
-  problems.push(`calm: lens reach ${report0.calmLens.reach} off`);
-if (report0.calmLens.tabClear < 2)
-  problems.push(`calm: lens overlaps the first tab (${report0.calmLens.tabClear})`);
+if (report0.calmBadge.morphVis !== "hidden") problems.push("calm: bell still visible");
+if (report0.calmBadge.morphHref) problems.push("calm: melted bell still a link");
 await page.screenshot({ path: shot("00-full-calm.png") });
 await page.screenshot({ path: shot("01-rail-calm.png"), clip });
 
@@ -182,7 +170,7 @@ await page.click(".morph-switch");
 await page.waitForTimeout(1400);
 const closeFrames = await collect();
 report0.calmAgainBadge = await badgeState();
-if (report0.calmAgainBadge.morphVis !== "visible") problems.push("calm again: bell item not visible");
+if (report0.calmAgainBadge.morphVis !== "hidden") problems.push("calm again: bell still visible");
 await page.screenshot({ path: shot("03-rail-calm-again.png"), clip });
 
 // --- 3b. the fusion is optical: no third paint, hosts filter-free, and
@@ -190,47 +178,32 @@ await page.screenshot({ path: shot("03-rail-calm-again.png"), clip });
 // filters = denser liquid at the junction), parting to the resting gap.
 const noNeck = await page.evaluate(() => !document.querySelector(".rail-neck"));
 if (!noNeck) problems.push("neck: a neck element still exists");
-// exactly one backdrop root in the rail: the metaball lens layer; the
-// content spans and the shell itself must stay filter-free, and the
-// lens must wear its silhouette mask at rest
-const railGlass = await page.evaluate(() => {
-  const bd = (s) => {
+const hostFiltersClean = await page.evaluate(() =>
+  [".rail", ".rail-morph", ".rail-tabs"].every((s) => {
     const c = getComputedStyle(document.querySelector(s));
-    return c.backdropFilter !== "none" && c.backdropFilter !== "";
-  };
-  return {
-    lens: bd(".rail-glass"),
-    masked: getComputedStyle(document.querySelector(".rail-glass")).maskImage !== "none",
-    rimMasked: getComputedStyle(document.querySelector(".rail-rim")).maskImage !== "none",
-    clean: [".rail", ".rail-morph", ".rail-tabs", ".rail-tab"].every((s) => !bd(s)),
-  };
-});
-if (!railGlass.lens || !railGlass.masked || !railGlass.rimMasked)
-  problems.push(`glass: lens layer incomplete ${JSON.stringify(railGlass)}`);
-if (!railGlass.clean) problems.push("glass: stray backdrop root inside the rail");
+    return c.filter === "none" && (c.backdropFilter === "none" || c.backdropFilter === "");
+  })
+);
+if (!hostFiltersClean) problems.push("fusion: filter/backdrop-filter on rail or a host");
 for (const [dir, fr] of [
   ["open", openFrames],
   ["close", closeFrames],
 ]) {
   const gaps = fr.map((f) => f.gap);
-  const end = gaps.at(-1);
-  // one body dividing: the cap gap must travel monotonically between
-  // the lens-inside rest and the two-piece rest; a reversal mid-flight
-  // (ignoring the spring's settle wiggle near the end) means the piece
-  // bounced instead of flowing
-  for (let i2 = 1; i2 < gaps.length; i2++) {
-    if (Math.abs(gaps[i2] - end) < 6) continue;
-    const d = gaps[i2] - gaps[i2 - 1];
-    if ((dir === "open" && d < -2.5) || (dir === "close" && d > 2.5)) {
-      problems.push(`fusion: ${dir} gap reverses at t=${fr[i2].t} (${gaps[i2 - 1]} -> ${gaps[i2]})`);
-      break;
-    }
-  }
+  const penetration = Math.min(...gaps);
+  // liquid contact: the bell cap must enter the pill cap mid-flight
+  // (negative gap), but stay inside the pill's 28px cap zone — deeper
+  // and the droplet would occlude the first tab instead of merging
+  // with the cap
+  if (penetration > -2)
+    problems.push(`fusion: ${dir} caps never inter-penetrate (min gap ${penetration})`);
+  if (penetration < -22)
+    problems.push(`fusion: ${dir} penetration too deep (${penetration})`);
   const last = fr.at(-1);
   if (dir === "open") {
     if (Math.abs(last.gap - 10) > 0.6) problems.push(`fusion: open rest gap ${last.gap}`);
-  } else if (last.gap > -40 || last.gap < -60) {
-    problems.push(`fusion: close rest lens not inside the pill (gap ${last.gap})`);
+  } else if (last.morphVis !== "hidden" || last.morphW > 0.5) {
+    problems.push(`fusion: close rest still shows the bell (${last.morphW}px)`);
   }
 }
 
@@ -244,7 +217,7 @@ await page.emulateMedia({ reducedMotion: null });
 await page.waitForTimeout(900);
 // the flip itself still happens under PRM (0 -> 56 in 1ms); what must
 // not exist is any INTERMEDIATE width, i.e. visible travel
-if (prmFrames.some((f) => f.morphW > 44.5 && f.morphW < 55.5))
+if (prmFrames.some((f) => f.morphW > 1 && f.morphW < 55))
   problems.push("prm: morph still travels under prefers-reduced-motion");
 
 // --- 4. ghost diff: calm again must be pixel-identical to calm ------------
@@ -253,11 +226,17 @@ const ghostAE = pixelDiff(shot("01-rail-calm.png"), shot("03-rail-calm-again.png
 // --- 5. static assertions from the recorded frames -------------------------
 const analyze = (frames) => {
   const lefts = frames.map((f) => f.tabsLeft);
+  const drift = frames.map((f) => +(f.coverLeft - f.tabsLeft).toFixed(1));
+  const tops = frames.map((f) => +(f.coverTop - f.tabsTop).toFixed(1));
+  const widths = frames.map((f) => +(f.coverW - f.tabsW).toFixed(1));
   const morphW = frames.map((f) => f.morphW);
   return {
     n: frames.length,
     tabsLeftMin: Math.min(...lefts),
     tabsLeftMax: Math.max(...lefts),
+    coverTabsLeftDriftMax: Math.max(...drift.map(Math.abs)),
+    coverTabsTopDriftMax: Math.max(...tops.map(Math.abs)),
+    coverTabsWidthDriftMax: Math.max(...widths.map(Math.abs)),
     morphWMin: Math.min(...morphW),
     morphWMax: Math.max(...morphW),
     tabsTopMin: Math.min(...frames.map((f) => f.tabsTop)),
@@ -278,7 +257,7 @@ const result = {
   railBox,
   fontProbe,
   ghostAbsoluteErrorPixels: ghostAE,
-  railGlass,
+  hostFiltersClean,
   open: analyze(openFrames),
   close: analyze(closeFrames),
   openFrameSample: openFrames.filter((_, i) => i % 6 === 0),
