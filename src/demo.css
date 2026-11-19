@@ -679,9 +679,47 @@ html.end-dark .rail {
   color: oklch(0.97 0.004 var(--hue));
 }
 
-.rail-host {
-  height: 56px;
-  position: relative;
+/* The glass body and its edge light: two backdrop/mask roots that carry
+   NO content — the metaball lens from src/rail-glass.ts. The silhouette
+   and specular masks plus the displacement map are rewritten per morph
+   frame; the tint rides the ink switch through currentColor. */
+.rail-glass {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      rgb(255 255 255 / 0.3),
+      rgb(255 255 255 / 0.12) 55%,
+      rgb(255 255 255 / 0.24)
+    ),
+    color-mix(in oklab, currentColor 4%, rgb(255 255 255 / 0.3));
+  /* backdrop-filter is set inline from rail-glass.ts: the build's CSS
+     minifier merges/drops it in stylesheets (the same reason the glass
+     library sets every backdrop-filter inline). */
+}
+
+/* the defs svg is a flex child of the shell: park it out of flow at
+   zero size, exactly like the library's .lg-defs */
+.rail-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rail-rim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    rgb(255 255 255 / 0.85),
+    rgb(255 255 255 / 0.25) 55%,
+    rgb(255 255 255 / 0.6)
+  );
 }
 
 /* Host 1: the notifications button — an ITEM of the navigation, not a
@@ -700,11 +738,8 @@ html.end-dark .rail {
   color: inherit;
   text-decoration: none;
   z-index: 2;
-  /* elliptical caps keep every intermediate pose a liquid egg (the
-     library's scalar radius clamp would leave straight flanks below
-     56px); !important beats the mount-time inline radius, the underlay
-     inherits and the cover copies the computed value per sync pass. */
-  border-radius: 50% / calc(var(--btn) / 2) !important;
+  position: relative;
+  height: 56px;
   /* one spine for the whole body: piece position, piece width, pill
      position, pill width and the tabs' inner padding all share this
      curve, so the division reads as ONE glass moving, not as several
@@ -712,10 +747,6 @@ html.end-dark .rail {
   transition:
     width 0.58s cubic-bezier(0.3, 1.85, 0.45, 1),
     margin-left 0.58s cubic-bezier(0.3, 1.85, 0.45, 1);
-}
-
-.rail-morph + .lg-cover {
-  z-index: 2;
 }
 
 .rail[data-state="calm"] .rail-morph {
@@ -730,6 +761,24 @@ html.end-dark .rail {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+/* The item lens: at calm the bell sits inside the body, and an ink pill
+   under the glyph marks it as one of the navigation's items (the same
+   language as the selected tab's lens); once the piece stands on its
+   own in alert, the glass body is its surface and the ink leaves. */
+.rail-morph::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 999px;
+  background: color-mix(in oklab, currentColor 13%, transparent);
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rail[data-state="calm"] .rail-morph::before {
+  opacity: 1;
 }
 
 /* The bell glyph is the item's icon in BOTH states — it never leaves;
@@ -769,11 +818,7 @@ html.end-dark .rail {
 /* The badge is the reason the body divides at all: system red, 18px
    min, popping in on the alert spring and scaling out in calm. It
    rides the morph host, so it travels with the piece. */
-/* .rail-host .rail-badge, not .rail-badge: the glass library forces
-   position:relative + z-index:2 on every host child at equal
-   specificity from a later stylesheet, which would drop the badge into
-   the host's grid as a stretched item instead of pinning it. */
-.rail-host .rail-badge {
+.rail-morph .rail-badge {
   position: absolute;
   top: 5px;
   right: 6px;
@@ -822,7 +867,8 @@ html.end-dark .rail {
   position: absolute;
   top: 0;
   left: calc(var(--btn) + var(--gap));
-  z-index: 0;
+  z-index: 2;
+  height: 56px;
   width: var(--pill);
   min-width: 56px;
   display: flex;

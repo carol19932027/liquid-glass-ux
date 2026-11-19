@@ -336,3 +336,37 @@ Rig: lens-inside assertions at the calm rest (inset 2..10, reach
 directions (settle wiggle exempt), 10px two-piece rest, badge scale
 0<->1, reduced-motion no intermediate width. ghostAE 0, drift 0,
 guards OK.
+
+## 13. Addendum 2026-11-16 — the metaball lens (reference: glass-ui morphing)
+
+User supplied the reference: jeantimex.github.io/glass-ui/morphing.html —
+one lens whose silhouette is a field of two primitives, displacement and
+specular maps rasterised into an SVG filter per frame, spring-driven
+split. The rail now wears that technique (src/rail-glass.ts):
+
+- the silhouette is the smooth union (polynomial smin, k=6) of the bell
+  circle and the pill capsule; the waist, the thread and the snap-off
+  FALL OUT of the field — no third paint, no stacked-host trick
+- per morph frame the field is rasterised at rail size into three maps:
+  silhouette alpha (mask-image of the glass layer), displacement
+  (feImage -> feDisplacementMap over the backdrop, edge profile against
+  the outward normal, scale 14), and an edge-light band modulated by
+  the normal against a top-left key (mask of the rim layer)
+- the driver reads the live content rects (bell span, pill span), so
+  the CSS choreography stays the single source of motion; it parks
+  after 20 settled reads and stays alive while animations are paused
+  (the frames rig freezes them)
+- k=6 vs the 10px resting gap keeps both rests clean: the thread only
+  exists while the surfaces are closer than k, i.e. inside the motion
+- wiring mirrors src/glass (read-only reference): backdrop-filter
+  url(#rail-refract) set INLINE (the build minifier drops
+  backdrop-filter from stylesheets — the library's own reason for
+  setting it inline), defs svg parked zero-size out of the flex flow
+- the rail hosts are plain content spans now; the bell's item lens at
+  calm is an ink pill (::before), the same language as the selected
+  tab's lens; the library still owns every other glass on the page
+
+Rig: the lens layer is asserted as the rail's single backdrop root
+(with silhouette and rim masks present), shell and content spans
+filter-free; gap monotonicity, rests, badge, ghost and PRM checks
+unchanged. ghostAE 0, guards OK.

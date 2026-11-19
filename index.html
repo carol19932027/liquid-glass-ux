@@ -219,14 +219,23 @@ createLiquidGlass(element, { radius: 30 });</code></pre>
          layer (will-change: transform), which makes it a backdrop root — a
          fixed glass inside it would lose the page canvas from its backdrop. -->
     <nav class="rail" data-state="calm" aria-label="Navigation">
-      <a class="rail-host rail-morph" href="#top" aria-label="Notifications, no unread" data-lg-dark>
+      <!-- The glass body: ONE metaball lens (src/rail-glass.ts). Its
+           silhouette is the smooth union of the bell circle and the
+           pill capsule, rasterised per morph frame into a displacement
+           map (backdrop-filter: url(#rail-refract)) plus silhouette and
+           edge-light masks — the waist, thread and snap-off fall out of
+           the field itself. Two backdrop roots that contain no glass
+           host: the only place a filter may live this close to the rail. -->
+      <span class="rail-glass" aria-hidden="true"></span>
+      <span class="rail-rim" aria-hidden="true"></span>
+      <a class="rail-morph" href="#top" aria-label="Notifications, no unread">
         <span class="rail-face rail-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="18" height="18"><path fill="currentColor" d="M8 1.4c-2.4 0-4.3 1.9-4.3 4.3 0 2.5-.8 3.9-1.4 4.7-.3.4 0 .9.4.9h10.6c.4 0 .7-.5.4-.9-.6-.8-1.4-2.2-1.4-4.7 0-2.4-1.9-4.3-4.3-4.3Z" /><path fill="currentColor" d="M6.6 12.5a1.5 1.5 0 0 0 2.8 0Z" /></svg></span>
         <span class="rail-badge" aria-hidden="true"></span>
       </a>
       <!-- The tab bar: three tabs read right to left (میزکار first, at the
            right end), so the host itself is the RTL island; lang="fa" keeps
            screen readers in the right voice for the Persian labels. -->
-      <span class="rail-host rail-tabs" data-lg-dark dir="rtl" lang="fa" role="tablist" aria-label="ناوبری">
+      <span class="rail-tabs" dir="rtl" lang="fa" role="tablist" aria-label="ناوبری">
         <button class="rail-tab" type="button" role="tab" style="--i:0" aria-selected="true" tabindex="0"><span>میزکار</span></button>
         <button class="rail-tab" type="button" role="tab" style="--i:1" aria-selected="false" tabindex="-1"><span>برنامه‌ها</span></button>
         <button class="rail-tab" type="button" role="tab" style="--i:2" aria-selected="false" tabindex="-1"><span>دستیار</span></button>

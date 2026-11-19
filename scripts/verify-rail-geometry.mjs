@@ -100,21 +100,16 @@ const clip = {
 const startRecorder = () =>
   page.evaluate(() => {
     const tabs = document.querySelector(".rail-tabs");
-    const cover = document.querySelector(".rail-tabs + .lg-cover");
     const morph = document.querySelector(".rail-morph");
     window.__rec = { t0: performance.now(), frames: [] };
     const tick = () => {
       const rt = tabs.getBoundingClientRect();
-      const rc = cover.getBoundingClientRect();
       const rm = morph.getBoundingClientRect();
       window.__rec.frames.push({
         t: +(performance.now() - window.__rec.t0).toFixed(1),
         tabsLeft: +rt.left.toFixed(1),
         tabsTop: +rt.top.toFixed(1),
         tabsW: +rt.width.toFixed(1),
-        coverLeft: +rc.left.toFixed(1),
-        coverTop: +rc.top.toFixed(1),
-        coverW: +rc.width.toFixed(1),
         tabsVis: getComputedStyle(tabs).visibility,
         morphW: +rm.width.toFixed(1),
         morphL: +rm.left.toFixed(1),
@@ -195,13 +190,24 @@ await page.screenshot({ path: shot("03-rail-calm-again.png"), clip });
 // filters = denser liquid at the junction), parting to the resting gap.
 const noNeck = await page.evaluate(() => !document.querySelector(".rail-neck"));
 if (!noNeck) problems.push("neck: a neck element still exists");
-const hostFiltersClean = await page.evaluate(() =>
-  [".rail", ".rail-morph", ".rail-tabs"].every((s) => {
+// exactly one backdrop root in the rail: the metaball lens layer; the
+// content spans and the shell itself must stay filter-free, and the
+// lens must wear its silhouette mask at rest
+const railGlass = await page.evaluate(() => {
+  const bd = (s) => {
     const c = getComputedStyle(document.querySelector(s));
-    return c.filter === "none" && (c.backdropFilter === "none" || c.backdropFilter === "");
-  })
-);
-if (!hostFiltersClean) problems.push("fusion: filter/backdrop-filter on rail or a host");
+    return c.backdropFilter !== "none" && c.backdropFilter !== "";
+  };
+  return {
+    lens: bd(".rail-glass"),
+    masked: getComputedStyle(document.querySelector(".rail-glass")).maskImage !== "none",
+    rimMasked: getComputedStyle(document.querySelector(".rail-rim")).maskImage !== "none",
+    clean: [".rail", ".rail-morph", ".rail-tabs", ".rail-tab"].every((s) => !bd(s)),
+  };
+});
+if (!railGlass.lens || !railGlass.masked || !railGlass.rimMasked)
+  problems.push(`glass: lens layer incomplete ${JSON.stringify(railGlass)}`);
+if (!railGlass.clean) problems.push("glass: stray backdrop root inside the rail");
 for (const [dir, fr] of [
   ["open", openFrames],
   ["close", closeFrames],
@@ -247,17 +253,11 @@ const ghostAE = pixelDiff(shot("01-rail-calm.png"), shot("03-rail-calm-again.png
 // --- 5. static assertions from the recorded frames -------------------------
 const analyze = (frames) => {
   const lefts = frames.map((f) => f.tabsLeft);
-  const drift = frames.map((f) => +(f.coverLeft - f.tabsLeft).toFixed(1));
-  const tops = frames.map((f) => +(f.coverTop - f.tabsTop).toFixed(1));
-  const widths = frames.map((f) => +(f.coverW - f.tabsW).toFixed(1));
   const morphW = frames.map((f) => f.morphW);
   return {
     n: frames.length,
     tabsLeftMin: Math.min(...lefts),
     tabsLeftMax: Math.max(...lefts),
-    coverTabsLeftDriftMax: Math.max(...drift.map(Math.abs)),
-    coverTabsTopDriftMax: Math.max(...tops.map(Math.abs)),
-    coverTabsWidthDriftMax: Math.max(...widths.map(Math.abs)),
     morphWMin: Math.min(...morphW),
     morphWMax: Math.max(...morphW),
     tabsTopMin: Math.min(...frames.map((f) => f.tabsTop)),
@@ -278,7 +278,7 @@ const result = {
   railBox,
   fontProbe,
   ghostAbsoluteErrorPixels: ghostAE,
-  hostFiltersClean,
+  railGlass,
   open: analyze(openFrames),
   close: analyze(closeFrames),
   openFrameSample: openFrames.filter((_, i) => i % 6 === 0),

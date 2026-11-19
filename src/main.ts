@@ -1,4 +1,5 @@
 import { createLiquidGlass, supportsRefraction } from "./glass/liquid-glass";
+import { createRailGlass } from "./rail-glass";
 
 const glass = document.querySelector<HTMLElement>(".glass")!;
 const title = document.querySelector<HTMLElement>("h1")!;
@@ -331,16 +332,21 @@ const railTabsHost = document.querySelector<HTMLElement>(".rail-tabs")!;
 const railMorph = document.querySelector<HTMLAnchorElement>(".rail-morph")!;
 const railSwitch = document.querySelector<HTMLInputElement>("#morph-switch")!;
 
-for (const host of document.querySelectorAll<HTMLElement>(".rail-host")) {
-  // reflect: false — the reflection layer overhangs its host by `pad` on
-  // every side; two overhanging backdrop roots filtering each other's
-  // pixels invalidate one another every frame and blink the glass out
-  // to near-transparent. Without it the hosts MAY overlap (they do, mid
-  // morph): the stack is one-way — bell z2 over pill z0 — so only the
-  // bell ever samples the other's glass, and that stacked sampling is
-  // exactly the fusion effect.
-  createLiquidGlass(host, { radius: 28, reflect: false });
-}
+// The rail's glass is one metaball lens now (src/rail-glass.ts): the
+// silhouette is the smooth union of the bell circle and the pill capsule,
+// read live from the two content spans below, so the division and the
+// merge are the field moving — no per-host glass, no third paint.
+const railGlass = createRailGlass(rail, () => {
+  const rr = rail.getBoundingClientRect();
+  const br = railMorph.getBoundingClientRect();
+  const tr = railTabsHost.getBoundingClientRect();
+  return {
+    bellX: br.left - rr.left + br.width / 2,
+    bellR: Math.max(4, br.width / 2),
+    pillL: tr.left - rr.left,
+    pillR: tr.right - rr.left,
+  };
+});
 
 const railBadge = document.querySelector<HTMLElement>(".rail-badge")!;
 
@@ -395,5 +401,6 @@ railSwitch.addEventListener("change", () => {
   // written once to match the switch's initial position.
   rail.classList.add("rail-armed");
   setRailState(railSwitch.checked);
+  railGlass.start();
 });
 setRailState(railSwitch.checked);
