@@ -1,19 +1,20 @@
 // Rail motion verification: freeze-frame strips of both morph directions.
 //
-// A headless software rasterizer needs ~0.5s per screenshot, so racing the
-// real 600ms morph never lands mid-motion. Instead every animation the
-// state flip spawns is paused through the Web Animations API, then
-// currentTime is stepped deterministically (0..880ms after the flip) and
-// each pose is shot: an exact, repeatable frame strip of the choreography.
-// The real-time timing is what scripts/verify-rail-geometry.mjs measures.
+// The morph is a JS spring (src/rail-glass.ts, the glass-ui morphing
+// reference's k=140/c=16), so there is no Web Animations timeline to step:
+// instead the rig poses the spring deterministically through
+// window.railGlass.pose(p) — p is the split parameter, 0 = capsule alone,
+// 1 = bell parked at its 10px gap (values past 1 show the spring's
+// overshoot splash). Each pose rasterises its own silhouette, displacement
+// and specular maps, so every frame of the strip is the real liquid, not an
+// interpolation. Real-time timing is what verify-rail-geometry.mjs measures.
 //
 // Requirements:
 //   npm ci                        # installs playwright-core + @sparticuz/chromium
-//   npm run preview               # in another terminal (or set RAIL_URL)
+//   npm run build && npm run preview   # :4173 serves dist
 //   npm run verify:rail:frames
 //
-// Frames and montaged strips land in verify-artifacts/ (gitignored); the
-// montage step needs ImageMagick and is printed as a hint at the end.
+// Frames land in verify-artifacts/ (gitignored).
 import { chromium } from "playwright-core";
 import sparticuz from "@sparticuz/chromium";
 import { brotliDecompressSync } from "node:zlib";
@@ -22,7 +23,8 @@ import fs from "node:fs";
 
 const OUT = "verify-artifacts";
 const URL = process.env.RAIL_URL ?? "http://127.0.0.1:4173/";
-const TIMES = [0, 60, 120, 180, 260, 340, 440, 560, 700, 880];
+const OPEN = [0, 0.16, 0.34, 0.55, 0.78, 0.95, 1.08, 1];
+const CLOSE = [1, 0.85, 0.62, 0.4, 0.2, 0.06, 0];
 
 const LIB = "/tmp/al2023/lib";
 if (!fs.existsSync(`${LIB}/libnss3.so`)) {
@@ -36,11 +38,8 @@ process.env.LD_LIBRARY_PATH = [LIB, process.env.LD_LIBRARY_PATH].filter(Boolean)
 fs.mkdirSync(OUT, { recursive: true });
 
 const exe = await sparticuz.executablePath();
-const browser = await chromium.launch({
-  executablePath: exe,
-  args: [...sparticuz.args, "--no-sandbox"],
-});
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const browser = await chromium.launch({ executablePath: exe, args: [...sparticuz.args, "--no-sandbox"] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
 await page.goto(URL, { waitUntil: "networkidle" });
 await page.waitForTimeout(2500);
 
@@ -54,42 +53,21 @@ const railBox = await page.evaluate(() => {
   };
 });
 
-const freeze = async (name) => {
-  await page.click(".morph-switch");
-  await page.evaluate(() => {
-    const stop = () =>
-      document.getAnimations().forEach((a) => {
-        if (a.timeline === document.timeline) a.pause();
-      });
-    stop();
-    requestAnimationFrame(stop); // catch animations spawned a frame late
-  });
-  for (const [i, t] of TIMES.entries()) {
-    await page.evaluate(
-      (ms) => {
-        document.getAnimations().forEach((a) => {
-          if (a.timeline === document.timeline) a.currentTime = ms;
-        });
-      },
-      t
-    );
+const strip = async (name, poses) => {
+  for (const [i, p] of poses.entries()) {
+    await page.evaluate((pp) => window.railGlass.pose(pp), p);
+    await page.waitForTimeout(150);
     await page.screenshot({ path: `${OUT}/fz-${name}-${String(i).padStart(2, "0")}.png`, clip: railBox });
   }
-  await page.evaluate(() =>
-    document.getAnimations().forEach((a) => {
-      if (a.timeline === document.timeline) a.play();
-    })
-  );
-  await page.waitForTimeout(1600); // let the (unpaused) morph finish
-  console.log(name, "strip captured");
+  console.log(name, "strip captured", poses.join(","));
 };
 
-await freeze("open");
-await freeze("close");
+await strip("open", OPEN);
+await strip("close", CLOSE);
 await browser.close();
-fs.writeFileSync(`${OUT}/fz-times.json`, JSON.stringify(TIMES));
+fs.writeFileSync(`${OUT}/fz-poses.json`, JSON.stringify({ OPEN, CLOSE }));
 console.log(
   `frames in ${OUT}/fz-*.png — montage them with:\n` +
-    `  montage ${OUT}/fz-open-*.png -tile 2x5 -geometry +3+3 -background '#333' ${OUT}/fz-open-strip.png\n` +
-    `  montage ${OUT}/fz-close-*.png -tile 2x5 -geometry +3+3 -background '#333' ${OUT}/fz-close-strip.png`
+    `  montage ${OUT}/fz-open-*.png -tile 2x4 -geometry +3+3 -background '#333' ${OUT}/fz-open-strip.png\n` +
+    `  montage ${OUT}/fz-close-*.png -tile 2x4 -geometry +3+3 -background '#333' ${OUT}/fz-close-strip.png`
 );

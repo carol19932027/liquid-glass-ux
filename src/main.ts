@@ -1,4 +1,5 @@
 import { createLiquidGlass, supportsRefraction } from "./glass/liquid-glass";
+import { createRailGlass } from "./rail-glass";
 
 const glass = document.querySelector<HTMLElement>(".glass")!;
 const title = document.querySelector<HTMLElement>("h1")!;
@@ -320,56 +321,63 @@ if (!supportsRefraction) {
 }
 
 // --- The morph rail ---------------------------------------------------------
-// Two glass hosts, one data-state. The switch is the only writer: it flips
-// the rail between the labelled pill and the split notification-button-
-// plus-tab-bar, and everything else is the CSS transition set in demo.css.
-// The pill's own href follows the state: in-page while it labels the
-// sections, back to the top once it has become the bell button.
+// An iOS 27 tab bar on ONE metaball lens: src/rail-glass.ts owns the field
+// and the reference spring; this file owns the semantics. The notification
+// count the switch simulates is the only writer of data-state and of the
+// spring's target: alert (badge > 0) splits the bell droplet out of the
+// capsule's left cap; calm (zero mail) melts it back to radius 0 and
+// disables the bell button, so nothing of it stays in the tab order or the
+// accessibility tree. The tabs are navigation items (aria-current="page",
+// roving tabindex, RTL-aware arrows) — there are no panels on this page, so
+// the tablist pattern would promise content that does not exist.
+const NOTIFICATIONS = 3; // what the switch's "on" simulates as arrived
 const rail = document.querySelector<HTMLElement>(".rail")!;
 const railTabsHost = document.querySelector<HTMLElement>(".rail-tabs")!;
-const railMorph = document.querySelector<HTMLAnchorElement>(".rail-morph")!;
+const railBell = document.querySelector<HTMLButtonElement>(".rail-bell")!;
 const railSwitch = document.querySelector<HTMLInputElement>("#morph-switch")!;
+const railBadge = document.querySelector<HTMLElement>(".rail-badge")!;
 
-for (const host of document.querySelectorAll<HTMLElement>(".rail-host")) {
-  // reflect: false — the reflection layer overhangs its host by `pad` on
-  // every side, and the two rail hosts sit 10px apart, so their overhangs
-  // would overlap: two backdrop roots filtering each other's pixels,
-  // invalidating one another every frame, which blinks the glass out to
-  // near-transparent in the compact state, in any position, still or
-  // scrolling. Without the reflection layer the hosts cannot touch.
-  createLiquidGlass(host, { radius: 28, reflect: false });
-}
+const railGlass = createRailGlass(rail, supportsRefraction);
+// the frame rig poses the spring deterministically through this handle
+(window as unknown as Record<string, unknown>).railGlass = railGlass;
 
-const RAIL_STATES = {
-  label: { href: "#accurate", label: "Browse the sections" },
-  compact: { href: "#top", label: "Notifications" },
-} as const;
+// The capsule's width is content-driven — the Persian labels fall back to
+// the platform's font, so their metrics arrive late. Measure once fonts
+// settle and on resize; the lens re-reads its footprint from --pill-w.
+const measurePill = () => {
+  const w = Math.ceil(railTabsHost.offsetWidth);
+  if (w > 0) rail.style.setProperty("--pill-w", `${w}px`);
+  railGlass.resize();
+};
+measurePill();
+document.fonts?.ready.then(measurePill).catch(() => {});
+addEventListener("resize", measurePill);
 
-const setRailState = (compact: boolean) => {
-  rail.dataset.state = compact ? "compact" : "label";
-  const state = compact ? RAIL_STATES.compact : RAIL_STATES.label;
-  railMorph.href = state.href;
-  railMorph.setAttribute("aria-label", state.label);
+const setRailState = (alert: boolean) => {
+  rail.dataset.state = alert ? "alert" : "calm";
+  railBadge.textContent = String(NOTIFICATIONS);
+  railBell.disabled = !alert;
+  if (alert) railBell.removeAttribute("aria-hidden");
+  else railBell.setAttribute("aria-hidden", "true");
+  railBell.setAttribute("aria-label", alert ? `Notifications, ${NOTIFICATIONS} unread` : "Notifications");
+  railGlass.setTarget(alert ? 1 : 0);
 };
 
-// The tab bar: three tabs in an RTL island, the selected one wears the ink
-// pill. Selection moves with click and arrow keys (in RTL, ArrowLeft is
-// "forward"), roving tabindex per the tabs pattern; this demo has no tab
-// panels, so the state is purely the rail's own.
-const railTabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".rail-tab"));
-
-const selectTab = (tab: HTMLButtonElement) => {
-  for (const other of railTabs) {
-    const on = other === tab;
-    other.setAttribute("aria-selected", String(on));
-    other.tabIndex = on ? 0 : -1;
-  }
-};
-
-for (const [i, tab] of railTabs.entries()) {
+for (const [i, tab] of document.querySelectorAll<HTMLButtonElement>(".rail-tab").entries()) {
+  const railTabs = () => Array.from(document.querySelectorAll<HTMLButtonElement>(".rail-tab"));
+  const selectTab = (next: HTMLButtonElement) => {
+    for (const other of railTabs()) {
+      const on = other === next;
+      if (on) other.setAttribute("aria-current", "page");
+      else other.removeAttribute("aria-current");
+      other.tabIndex = on ? 0 : -1;
+    }
+  };
   tab.addEventListener("click", () => selectTab(tab));
   tab.addEventListener("keydown", (event) => {
-    const last = railTabs.length - 1;
+    const tabs = railTabs();
+    const last = tabs.length - 1;
+    // the host is an RTL island: ArrowLeft is "forward"
     const to =
       event.key === "ArrowLeft" ? Math.min(i + 1, last)
       : event.key === "ArrowRight" ? Math.max(i - 1, 0)
@@ -378,103 +386,10 @@ for (const [i, tab] of railTabs.entries()) {
       : -1;
     if (to < 0) return;
     event.preventDefault();
-    selectTab(railTabs[to]!);
-    railTabs[to]!.focus();
+    selectTab(tabs[to]!);
+    tabs[to]!.focus();
   });
 }
 
-railSwitch.addEventListener("change", () => {
-  // rail-armed enables the reference's anticipation nudge (a keyed
-  // animation on the morph host, translate out to 25px/20px at 28% of a
-  // .62s run and a pop-spring return). It is armed on the first switch
-  // flip only, so the rail never nudges on load, when the state is
-  // written once to match the switch's initial position.
-  rail.classList.add("rail-armed");
-  setRailState(railSwitch.checked);
-  startNeck();
-});
+railSwitch.addEventListener("change", () => setRailState(railSwitch.checked));
 setRailState(railSwitch.checked);
-
-// --- The liquid neck ---------------------------------------------------------
-// A gooey bridge between the bell's right cap and the tab pill's left cap
-// (see docs/gooey-morph-research.md). It is a sibling of the hosts, never
-// an ancestor, clipped to a catenoid path and carrying its own backdrop-
-// filter — a backdrop root that contains no glass, which is the only place
-// a filter may live this close to the rail. The path is rewritten per frame
-// from the LIVE cap rects while the morph runs, so it stays in phase with
-// the width spring, the 24px rise and the nudge without a parallel clock:
-// the waist thins as the caps separate (metaball falloff) and pinches off
-// exactly at the 10px resting gap, so both resting states stay neckless
-// and pixel-identical. On the merge it swells back until the caps meet.
-const railNeck = document.querySelector<HTMLElement>(".rail-neck")!;
-const NECK_SEP = 10; // cap gap (+ half the rise) that eats the waist whole
-const NECK_LIFE = 1200; // ms a neck run may live after a flip
-let neckReq = 0;
-let neckUntil = 0;
-
-const neckFrame = (now: number) => {
-  neckReq = 0;
-  const rr = rail.getBoundingClientRect();
-  const mr = railMorph.getBoundingClientRect();
-  const tr = railTabsHost.getBoundingClientRect();
-  const gap = tr.left - mr.right; // <0 while the caps still overlap
-  const rise = tr.top - rr.top; // 0 in the slot, ~24 parked below
-  const tl = tr.left - rr.left;
-  const trght = tr.right - rr.left;
-  const seamX = mr.right - rr.left; // morph's right cap, rail space
-  const tabVis = getComputedStyle(railTabsHost).visibility === "visible";
-  // Regime 1 — metaball bridge: the caps are apart (or nearly), the waist
-  // thins with the gap and pinches off exactly at the 10px resting gap.
-  const sep = gap + 0.5 * rise;
-  const wBridge = 44 * Math.pow(Math.min(1, Math.max(0, 1 - sep / NECK_SEP)), 1.6);
-  const bridge = tabVis && wBridge > 0.75 && gap + 28 > 1;
-  // Regime 2 — wet seam: the caps overlap, so the junction is the vertical
-  // seam where the morph's right cap sweeps across the tab pill. The neck
-  // straddles that seam at full height — the fused liquid body — from the
-  // fusion snap until the morph has swallowed the pill (or it parks).
-  const straddle =
-    tabVis && gap < 0 && rise > 1.5 && seamX > tl + 2 && seamX < trght - 16;
-  const show = (bridge || straddle) && (frozenCheck() || now < neckUntil);
-  if (show) {
-    const x1 = +((straddle ? seamX : mr.right - rr.left) - 14).toFixed(1);
-    const x2 = +((straddle ? seamX : tr.left - rr.left) + 14).toFixed(1);
-    // Viewport-space caps as written, so the verify rig can check the tuck
-    // against the exact rects this frame used (its own read lags by one).
-    const x1v = +(mr.right - 14).toFixed(1);
-    const x2v = +((straddle ? mr.right : tr.left) + 14).toFixed(1);
-    const w = straddle ? 44 : wBridge;
-    const yLt = 6;
-    const yLb = 50;
-    const yRt = +(rise + 6).toFixed(1);
-    const yRb = +(rise + 50).toFixed(1);
-    const mx = (x1 + x2) / 2;
-    const yc = 28 + rise / 2;
-    const yT = +(yc - w / 2).toFixed(1);
-    const yB = +(yc + w / 2).toFixed(1);
-    const q = (n: number) => +n.toFixed(1);
-    const d =
-      `M ${x1} ${yLt} C ${q(x1 + (mx - x1) / 2)} ${yLt}, ${q(mx)} ${q(yLt + (yT - yLt) / 2)}, ${q(mx)} ${yT} ` +
-      `C ${q(mx)} ${q(yRt + (yT - yRt) / 2)}, ${q(x2 - (x2 - mx) / 2)} ${yRt}, ${x2} ${yRt} ` +
-      `L ${x2} ${yRb} C ${q(x2 - (x2 - mx) / 2)} ${yRb}, ${q(mx)} ${q(yRb + (yB - yRb) / 2)}, ${q(mx)} ${yB} ` +
-      `C ${q(mx)} ${q(yLb + (yB - yLb) / 2)}, ${q(x1 + (mx - x1) / 2)} ${yLb}, ${x1} ${yLb} Z`;
-    railNeck.style.clipPath = `path("${d}")`;
-    railNeck.style.visibility = "visible";
-    railNeck.dataset.span = [x1v, x2v, mr.right.toFixed(1), tr.left.toFixed(1)].join(",");
-  } else {
-    railNeck.style.visibility = "hidden";
-  }
-  if (show || frozenCheck() || now < neckUntil) neckReq = requestAnimationFrame(neckFrame);
-};
-
-// The verification rig freezes animations; a frozen morph must keep its
-// neck instead of letting the run expire mid-capture.
-const frozenCheck = () =>
-  document
-    .getAnimations()
-    .some((a) => a.playState === "paused" && a.timeline === document.timeline);
-
-const startNeck = () => {
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  neckUntil = performance.now() + NECK_LIFE;
-  if (!neckReq) neckReq = requestAnimationFrame(neckFrame);
-};

@@ -31,3 +31,7 @@ dist
 
 # local motion-verification output (screenshots, frame strips, report)
 verify-artifacts/
+
+# impeccable local state
+.impeccable/config.local.json
+.impeccable/hook.cache.json

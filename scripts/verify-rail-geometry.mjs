@@ -1,23 +1,21 @@
-// Rail motion verification: geometry, ghost diff, console errors.
+// Rail verification for the iOS 27 metaball lens rail: geometry, tokens,
+// targets, ghost diff, console errors.
 //
-// Runs the built site in headless Chromium and records, per animation
-// frame, what the morph does: the tab pill's left/top, its glass cover's
-// rect (they must ride together — a drift means a ghost), the morph
-// host's width (must stay inside [56px, rail width]), and visibility
-// flips. Also pixel-diffs the label state before/after a full open+close
-// cycle (a ghost disc would show up as differing pixels) and collects
-// console/page errors.
+// The rail is notification-driven: calm (zero mail) is the capsule alone,
+// centred, the bell melted to radius 0 inside its left cap; alert grows the
+// bell droplet out of that cap on the reference spring (k=140, c=16) and
+// parks it 10px from the capsule. The lens (src/rail-glass.ts) rasterises
+// silhouette + displacement + specular maps per spring frame; this rig
+// records the spring's geometry per rAF, checks the resting poses, the
+// token wiring, the 44pt targets, and pixel-diffs calm before/after a full
+// alert+calm cycle (a ghost disc would show as differing pixels).
 //
 // Requirements:
 //   npm ci                        # installs playwright-core + @sparticuz/chromium
-//   npm run preview               # in another terminal (or set RAIL_URL)
+//   npm run build && npm run preview   # :4173 serves dist
 //   npm run verify:rail
 //
-// The browser is @sparticuz/chromium: its npm tarball carries the Brotli
-// binary, so no CDN download is needed; the three NSS libs it misses on
-// plain Debian are extracted from the package's own al2023.tar.br into
-// /tmp and fed through LD_LIBRARY_PATH. Outputs land in verify-artifacts/
-// (gitignored).
+// Outputs land in verify-artifacts/ (gitignored).
 import { chromium } from "playwright-core";
 import sparticuz from "@sparticuz/chromium";
 import { brotliDecompressSync } from "node:zlib";
@@ -27,7 +25,6 @@ import fs from "node:fs";
 const OUT = "verify-artifacts";
 const URL = process.env.RAIL_URL ?? "http://127.0.0.1:4173/";
 
-// --- the NSS/NSPR libs the Lambda build expects, from the package itself --
 const LIB = "/tmp/al2023/lib";
 if (!fs.existsSync(`${LIB}/libnss3.so`)) {
   const br = "node_modules/@sparticuz/chromium/bin/al2023.tar.br";
@@ -41,7 +38,6 @@ fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 const shot = (name) => `${OUT}/${name}`;
 
-// ImageMagick 7 ships `magick`, 6 ships `compare`; take whichever exists.
 const pixelDiff = (a, b, out) => {
   for (const bin of [["magick", "compare"], ["compare"]]) {
     try {
@@ -57,14 +53,8 @@ const pixelDiff = (a, b, out) => {
 };
 
 const exe = await sparticuz.executablePath();
-const browser = await chromium.launch({
-  executablePath: exe,
-  args: [...sparticuz.args, "--no-sandbox"],
-});
-const page = await browser.newPage({
-  viewport: { width: 1440, height: 900 },
-  deviceScaleFactor: 2,
-});
+const browser = await chromium.launch({ executablePath: exe, args: [...sparticuz.args, "--no-sandbox"] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
 
 const problems = [];
 page.on("console", (m) => {
@@ -73,16 +63,7 @@ page.on("console", (m) => {
 page.on("pageerror", (e) => problems.push(`pageerror: ${String(e.message).slice(0, 160)}`));
 
 await page.goto(URL, { waitUntil: "networkidle" });
-await page.waitForTimeout(2500); // let the glass init, video, and fonts settle
-
-const fontProbe = await page.evaluate(() => {
-  const c = document.createElement("canvas").getContext("2d");
-  c.font = '600 16px "Noto Sans Arabic", serif';
-  const noto = c.measureText("\u0645\u06cc\u0632\u06a9\u0627\u0631").width;
-  c.font = "600 16px serif";
-  const bare = c.measureText("\u0645\u06cc\u0632\u06a9\u0627\u0631").width;
-  return { noto, bare, resolved: noto !== bare };
-});
+await page.waitForTimeout(2500);
 
 const railBox = await page.evaluate(() => {
   const r = document.querySelector(".rail").getBoundingClientRect();
@@ -95,172 +76,185 @@ const clip = {
   height: Math.round(railBox.height + 120),
 };
 
+// per-frame spring geometry: bell proxy circle vs capsule proxy
 const startRecorder = () =>
   page.evaluate(() => {
-    const tabs = document.querySelector(".rail-tabs");
-    const cover = document.querySelector(".rail-tabs + .lg-cover");
-    const morph = document.querySelector(".rail-morph");
-    const neck = document.querySelector(".rail-neck");
+    const rail = document.querySelector(".rail");
+    const bell = rail.querySelector(".rail-lift-bell");
+    const pill = rail.querySelector(".rail-lift-pill");
     window.__rec = { t0: performance.now(), frames: [] };
     const tick = () => {
-      const rt = tabs.getBoundingClientRect();
-      const rc = cover.getBoundingClientRect();
-      const rm = morph.getBoundingClientRect();
-      const sp = (neck.dataset.span || "").split(",").map(Number);
+      const rb = bell.getBoundingClientRect();
+      const rp = pill.getBoundingClientRect();
       window.__rec.frames.push({
         t: +(performance.now() - window.__rec.t0).toFixed(1),
-        tabsLeft: +rt.left.toFixed(1),
-        tabsTop: +rt.top.toFixed(1),
-        tabsW: +rt.width.toFixed(1),
-        coverLeft: +rc.left.toFixed(1),
-        coverTop: +rc.top.toFixed(1),
-        coverW: +rc.width.toFixed(1),
-        tabsVis: getComputedStyle(tabs).visibility,
-        morphW: +rm.width.toFixed(1),
-        morphR: +rm.right.toFixed(1),
-        neckVis: getComputedStyle(neck).visibility,
-        // as written by the driver: neck caps + the rects that frame used
-        neckL: sp.length === 4 ? sp[0] : null,
-        neckR: sp.length === 4 ? sp[1] : null,
-        neckMorphR: sp.length === 4 ? sp[2] : null,
-        neckTabsL: sp.length === 4 ? sp[3] : null,
+        bellD: +rb.width.toFixed(1),
+        bellR: +rb.right.toFixed(1),
+        pillL: +rp.left.toFixed(1),
+        pillW: +rp.width.toFixed(1),
+        gap: +(rp.left - rb.right).toFixed(1),
       });
       if (performance.now() - window.__rec.t0 < 2200) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   });
-
 const collect = () => page.evaluate(() => window.__rec.frames);
 
-// --- 1. the label state (before anything moves) ---------------------------
-await page.screenshot({ path: shot("00-full-label.png") });
-await page.screenshot({ path: shot("01-rail-label.png"), clip });
-
-// --- 2. OPEN: switch on -> split ------------------------------------------
-await startRecorder();
-await page.click(".morph-switch");
-await page.waitForTimeout(1400);
-const openFrames = await collect();
-await page.screenshot({ path: shot("00-full-compact.png") });
-await page.screenshot({ path: shot("02-rail-compact.png"), clip });
-
-// --- 3. CLOSE: switch off -> merge ----------------------------------------
-await startRecorder();
-await page.click(".morph-switch");
-await page.waitForTimeout(1400);
-const closeFrames = await collect();
-await page.screenshot({ path: shot("03-rail-label-again.png"), clip });
-
-// --- 3b. the liquid neck: present mid-morph, absent at rest, caps tucked ---
-// The neck is a sibling of the hosts with its own backdrop-filter, so the
-// rail and both hosts must stay filter-free, and every visible neck frame
-// must keep its 14px tuck under the cap it bridges from (bridge regime:
-// morph.right -> tabs.left; wet-seam regime: straddling morph.right).
-const hostFiltersClean = await page.evaluate(() =>
-  [".rail", ".rail-morph", ".rail-tabs"].every((s) => {
-    const c = getComputedStyle(document.querySelector(s));
-    return c.filter === "none" && (c.backdropFilter === "none" || c.backdropFilter === "");
-  })
-);
-if (!hostFiltersClean) problems.push("neck: filter/backdrop-filter on rail or a host");
-for (const [dir, fr] of [
-  ["open", openFrames],
-  ["close", closeFrames],
-]) {
-  if (fr[0]?.neckVis !== "hidden" || fr.at(-1)?.neckVis !== "hidden")
-    problems.push(`neck: ${dir} resting state is not neckless`);
-  const vis = fr.filter((f) => f.neckVis === "visible");
-  if (!vis.length) problems.push(`neck: ${dir} never visible mid-morph`);
-  const bad = vis.filter((f) => {
-    const i = fr.indexOf(f);
-    // the driver's rects may lag this recorder by one rAF tick (software
-    // rasterizers stretch a tick to ~60ms), so accept any morph edge the
-    // rail actually had within the last three frames
-    const win = fr.slice(Math.max(0, i - 2), i + 1).map((g) => g.morphR);
-    const live = f.neckMorphR >= Math.min(...win) - 0.5 && f.neckMorphR <= Math.max(...win) + 0.5;
-    return !(
-      Math.abs(f.neckL - (f.neckMorphR - 14)) <= 0.2 &&
-      (Math.abs(f.neckR - (f.neckTabsL + 14)) <= 0.2 ||
-        Math.abs(f.neckR - (f.neckMorphR + 14)) <= 0.2) &&
-      live &&
-      Math.abs(f.neckTabsL - f.tabsLeft) <= 0.2
-    );
+const state = () =>
+  page.evaluate(() => {
+    const rail = document.querySelector(".rail");
+    const bell = rail.querySelector(".rail-bell");
+    const badge = rail.querySelector(".rail-badge");
+    const glass = rail.querySelector(".rail-glass");
+    const rim = rail.querySelector(".rail-rim");
+    const cs = getComputedStyle(badge);
+    return {
+      state: rail.dataset.state,
+      bellDisabled: bell.disabled,
+      bellAriaHidden: bell.getAttribute("aria-hidden"),
+      bellLabel: bell.getAttribute("aria-label"),
+      badgeText: badge.textContent,
+      badgeScale: cs.scale,
+      badgeBg: cs.backgroundColor,
+      badgeInk: cs.color,
+      glassBF: getComputedStyle(glass).backdropFilter,
+      glassMask: getComputedStyle(glass).maskImage.slice(0, 22),
+      glassTint: getComputedStyle(glass).backgroundColor,
+      rimMask: getComputedStyle(rim).maskImage.slice(0, 22),
+      tabActive: getComputedStyle(rail.querySelector('.rail-tab[aria-current="page"]')).color,
+      tabInactive: getComputedStyle(rail.querySelector('.rail-tab:not([aria-current])')).color,
+      tabHeights: [...rail.querySelectorAll(".rail-tab")].map((t) => +t.getBoundingClientRect().height.toFixed(1)),
+      iconCount: rail.querySelectorAll(".rail-bell svg, .rail-tab svg").length,
+      libraryMounted: !!rail.querySelector(".lg-cover, .lg-layer, .rail-host"),
+      neck: !!document.querySelector(".rail-neck"),
+      contentFilters: [".rail-bell", ".rail-tabs", ".rail-tab"].every((s) => {
+        const c = getComputedStyle(rail.querySelector(s));
+        return c.filter === "none" && (c.backdropFilter === "none" || c.backdropFilter === "");
+      }),
+    };
   });
-  if (bad.length)
-    problems.push(
-      `neck: ${dir} cap tuck off in ${bad.length} frames, e.g. ${JSON.stringify(bad[0])}`
-    );
+
+const report = {};
+const mark = (m) => console.error("== " + m);
+
+// --- 1. calm: capsule alone, centred, bell melted away ---------------------
+report.calm = await state();
+if (report.calm.state !== "calm") problems.push(`initial state ${report.calm.state}`);
+if (!report.calm.bellDisabled || report.calm.bellAriaHidden !== "true") problems.push("calm: bell focusable/visible to AT");
+if (report.calm.badgeScale !== "0") problems.push(`calm badge scale ${report.calm.badgeScale}`);
+if (report.calm.libraryMounted) problems.push("calm: library glass still mounted on the rail");
+if (report.calm.neck) problems.push("neck: a neck element exists");
+if (!report.calm.contentFilters) problems.push("fusion: filter/backdrop-filter on rail content");
+if (!report.calm.glassBF.includes("url(") && !report.calm.glassBF.includes("blur(")) problems.push(`lens: no backdrop-filter (${report.calm.glassBF})`);
+if (!report.calm.glassMask.startsWith("url(")) problems.push("lens: silhouette mask missing");
+if (!report.calm.rimMask.startsWith("url(")) problems.push("rim: specular mask missing");
+if (Math.min(...report.calm.tabHeights) < 44) problems.push(`targets: tab height ${report.calm.tabHeights}`);
+if (report.calm.iconCount !== 4) problems.push(`icons: ${report.calm.iconCount} svgs in the rail`);
+// token wiring (light column of components/ios-tokens.css)
+if (report.calm.tabActive !== "rgb(0, 96, 214)") problems.push(`token: selected tab ${report.calm.tabActive}`);
+if (report.calm.tabInactive !== "rgba(60, 60, 67, 0.78)") problems.push(`token: inactive tab ${report.calm.tabInactive}`);
+if (report.calm.glassTint !== "rgba(248, 248, 250, 0.66)") problems.push(`token: glass tint ${report.calm.glassTint}`);
+if (report.calm.badgeBg !== "rgb(255, 159, 10)") problems.push(`token: badge ${report.calm.badgeBg}`);
+mark("calm-shot");
+await page.screenshot({ path: shot("00-full-calm.png") });
+await page.screenshot({ path: shot("01-rail-calm.png"), clip });
+
+// --- 2. ALERT: mail arrives, the droplet grows out of the cap --------------
+mark("alert");
+await startRecorder();
+await page.click(".morph-switch");
+await page.waitForTimeout(2200);
+const openFrames = await collect();
+report.alert = await state();
+if (report.alert.state !== "alert") problems.push(`alert state ${report.alert.state}`);
+if (report.alert.bellDisabled || report.alert.bellAriaHidden !== null) problems.push("alert: bell not live");
+if (report.alert.badgeText !== "3" || report.alert.badgeScale !== "1") problems.push(`alert badge ${JSON.stringify(report.alert.badgeText)}/${report.alert.badgeScale}`);
+await page.screenshot({ path: shot("00-full-alert.png") });
+await page.screenshot({ path: shot("02-rail-alert.png"), clip });
+
+// --- 3. CALM again: mail cleared, the droplet melts back -------------------
+mark("calm-again");
+await page.screenshot({ path: shot("03-before-cycle.png"), clip });
+await startRecorder();
+await page.click(".morph-switch");
+await page.waitForTimeout(2200);
+const closeFrames = await collect();
+report.calmAgain = await state();
+if (report.calmAgain.state !== "calm") problems.push(`calm again ${report.calmAgain.state}`);
+if (!report.calmAgain.bellDisabled) problems.push("calm again: bell not disabled");
+await page.screenshot({ path: shot("03-rail-calm-again.png"), clip });
+
+// --- 4. spring geometry: contact mid-flight, clean 10px rest ---------------
+for (const [dir, fr] of [["open", openFrames], ["close", closeFrames]]) {
+  const gaps = fr.map((f) => f.gap);
+  const penetration = Math.min(...gaps);
+  const end = fr[fr.length - 1];
+  if (dir === "open") {
+    // the droplet is born INSIDE the cap (deeply negative gap) and parts
+    // to the 10px resting gap
+    if (penetration > -6) problems.push(`open: droplet never inside the cap (min gap ${penetration})`);
+    if (Math.abs(end.gap - 10) > 1.5) problems.push(`open: resting gap ${end.gap}`);
+    if (Math.abs(end.bellD - 56) > 1.5) problems.push(`open: resting bell ⌀ ${end.bellD}`);
+  } else {
+    if (end.bellD > 1) problems.push(`close: bell not melted (⌀ ${end.bellD})`);
+  }
+  report[`${dir}Gap`] = { min: penetration, end: end.gap, bellDEnd: end.bellD };
 }
 
-// --- 3c. reduced motion: the neck loop must never run ----------------------
-await page.emulateMedia({ reducedMotion: "reduce" });
-await startRecorder();
-await page.click(".morph-switch");
+// --- 5. ghost diff: calm before vs calm after a full cycle -----------------
+mark("ghost");
+report.ghostAE = pixelDiff(shot("01-rail-calm.png"), shot("03-rail-calm-again.png"), shot("ghost-diff.png"));
+if (report.ghostAE !== 0) problems.push(`ghost: ${report.ghostAE} differing pixels between calm rests`);
+
+// --- 6. narrow viewport: the capsule keeps its side margins ----------------
+await page.setViewportSize({ width: 320, height: 568 });
 await page.waitForTimeout(700);
-const prmFrames = await collect();
-await page.emulateMedia({ reducedMotion: null });
+const narrow = await page.evaluate(() => {
+  const r = document.querySelector(".rail").getBoundingClientRect();
+  return { x: +r.x.toFixed(1), right: +r.right.toFixed(1), vw: window.innerWidth };
+});
+report.narrow = narrow;
+if (narrow.x < 9.5 || narrow.vw - narrow.right < 9.5) problems.push(`narrow: rail margins ${narrow.x}/${narrow.vw - narrow.right}`);
+// --- 5b. end-dark: the rail re-declares the tokens' dark column ------------
+await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 await page.waitForTimeout(900);
-if (prmFrames.some((f) => f.neckVis === "visible"))
-  problems.push("neck: visible under prefers-reduced-motion");
-
-// --- 4. ghost diff: state 3 must be pixel-identical to state 1 ------------
-const ghostAE = pixelDiff(shot("01-rail-label.png"), shot("03-rail-label-again.png"), shot("ghost-diff.png"));
-
-// --- 5. static assertions from the recorded frames -------------------------
-const analyze = (frames) => {
-  const lefts = frames.map((f) => f.tabsLeft);
-  const drift = frames.map((f) => +(f.coverLeft - f.tabsLeft).toFixed(1));
-  const tops = frames.map((f) => +(f.coverTop - f.tabsTop).toFixed(1));
-  const widths = frames.map((f) => +(f.coverW - f.tabsW).toFixed(1));
-  const morphW = frames.map((f) => f.morphW);
-  return {
-    n: frames.length,
-    tabsLeftMin: Math.min(...lefts),
-    tabsLeftMax: Math.max(...lefts),
-    coverTabsLeftDriftMax: Math.max(...drift.map(Math.abs)),
-    coverTabsTopDriftMax: Math.max(...tops.map(Math.abs)),
-    coverTabsWidthDriftMax: Math.max(...widths.map(Math.abs)),
-    morphWMin: Math.min(...morphW),
-    morphWMax: Math.max(...morphW),
-    tabsTopMin: Math.min(...frames.map((f) => f.tabsTop)),
-    tabsTopMax: Math.max(...frames.map((f) => f.tabsTop)),
-    visStart: frames[0]?.tabsVis,
-    visEnd: frames.at(-1)?.tabsVis,
-    neckVisibleFrames: frames.filter((f) => f.neckVis === "visible").length,
-    neckAtStart: frames[0]?.neckVis,
-    neckAtEnd: frames.at(-1)?.neckVis,
-  };
-};
-
-const result = {
-  url: URL,
-  browser: browser.version(),
-  reducedMotion: await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches),
-  railBox,
-  fontProbe,
-  ghostAbsoluteErrorPixels: ghostAE,
-  hostFiltersClean,
-  open: analyze(openFrames),
-  close: analyze(closeFrames),
-  openFrameSample: openFrames.filter((_, i) => i % 6 === 0),
-  closeFrameSample: closeFrames.filter((_, i) => i % 6 === 0),
-  problems,
-};
-fs.writeFileSync(shot("report.json"), JSON.stringify(result, null, 1));
-console.log(
-  JSON.stringify(
-    {
-      browser: browser.version(),
-      reducedMotion: result.reducedMotion,
-      fontProbe,
-      ghostAE,
-      open: result.open,
-      close: result.close,
-      problems: problems.slice(0, 6),
-    },
-    null,
-    1
-  )
-);
-
+const darkInk = await page.evaluate(() => ({
+  active: getComputedStyle(document.querySelector('.rail-tab[aria-current="page"]')).color,
+  inactive: getComputedStyle(document.querySelector('.rail-tab:not([aria-current])')).color,
+  tint: getComputedStyle(document.querySelector(".rail-glass")).backgroundColor,
+}));
+report.endDark = darkInk;
+if (darkInk.active !== "rgb(108, 178, 255)") problems.push(`end-dark: selected tab ${darkInk.active}`);
+if (darkInk.inactive !== "rgba(235, 235, 245, 0.82)") problems.push(`end-dark: inactive tab ${darkInk.inactive}`);
+if (darkInk.tint !== "rgba(34, 34, 38, 0.62)") problems.push(`end-dark: glass tint ${darkInk.tint}`);
+await page.close();
 await browser.close();
+
+// --- 7. reduced motion: the spring collapses to a jump ---------------------
+// (its own browser: closing a second live page in the same Lambda Chromium
+// instance takes the whole browser down mid-backdrop-filter)
+const browser2 = await chromium.launch({ executablePath: exe, args: [...sparticuz.args, "--no-sandbox"] });
+const prm = await browser2.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+await prm.goto(URL, { waitUntil: "networkidle" });
+await prm.waitForTimeout(2000);
+await prm.evaluate(() => {
+  const rail = document.querySelector(".rail");
+  window.__prm = [];
+  const bell = rail.querySelector(".rail-lift-bell");
+  const tick = () => {
+    window.__prm.push(+bell.getBoundingClientRect().width.toFixed(1));
+    if (window.__prm.length < 40) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+});
+await prm.click(".morph-switch");
+await prm.waitForTimeout(900);
+const prmSamples = await prm.evaluate(() => window.__prm);
+const prmDistinct = [...new Set(prmSamples)].length;
+report.prm = { distinct: prmDistinct, samples: prmSamples.slice(0, 8) };
+if (prmDistinct > 3) problems.push(`reduced motion: spring still animates (${prmDistinct} poses)`);
+await browser2.close();
+
+console.log(JSON.stringify({ problems, ...report }, null, 1));
+await browser.close();
+process.exit(problems.length ? 1 : 0);
