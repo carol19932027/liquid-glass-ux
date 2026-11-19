@@ -151,3 +151,35 @@ rightmost, ArrowLeft = forward.
 
 Each step is independently verifiable with `npm run review:rail` +
 `npm run verify:rail`; none of them touches `src/glass/*`.
+
+## 7. Redesign round — iOS 27 tokens + reference morph (follow-up commit)
+
+The bar was rebuilt per this review and the user's direction: iOS 27 tab-bar
+tokens, iOS 27-style symbols on every item, and the melt choreography
+replaced by the glass-ui morphing technique (one metaball lens, spring
+k=140/c=16, per-frame displacement + specular maps — `src/rail-glass.ts`).
+Re-measured with `npm run review:rail`:
+
+| Finding | Resolution | Measured after |
+|---|---|---|
+| 1 inactive ink 4.41:1 | `--ios-tab-inactive` (.78) via linked tokens | 5.44:1 light / 10.62:1 dark |
+| 2 badge 3.46:1 | `--ios-tint-warm` ground + `#241000` ink | 8.89:1 light / 10.22:1 dark |
+| 3 targets 33.5px | icon+label items, 56px tall | 56px |
+| 4 safe-area | `bottom: calc(clamp(…) + env(safe-area-inset-bottom))` | — |
+| 5 320px clip | `min(footprint, 100vw - 20px)` | 31.5px margins at 320 |
+| 6 tablist w/o panels | buttons + `aria-current="page"`, one nav label | — |
+| 9 selection treatment | tinted symbol+label per DESIGN §4 (no second glass) | `rgb(0,96,214)` / `rgb(108,178,255)` end-dark |
+| 10 no symbols | 24px filled SF-Symbol-style glyphs on all four items | 4 svgs |
+| 11 physical props | badge on `inset-inline-end`; bell-left kept (user direction) | — |
+| 12 hard-coded inks | `@import "../components/ios-tokens.css"` + end-dark column | tokens verified |
+| 13 sticky hover | `@media (hover: hover)` | — |
+| 14 reduced transparency | tokens' media query feeds the inline frost chain | — |
+
+Morph verification: `verify:rail` — droplet born inside the cap (min gap
+−18), clean 10px rest, bell ⌀ 56→0 on close, ghostAE 0, reduced-motion
+spring collapses to a two-pose jump; `verify:rail:frames` poses the spring
+through `window.railGlass.pose(p)`.
+
+Still open (component scope, not touched here): 7 (`items` innerHTML),
+8 (Persian webfont — labels still render in the platform fallback),
+15–17 (shadow nav name, dock/minimized targets, silent icon fallback).

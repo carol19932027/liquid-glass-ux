@@ -76,11 +76,11 @@ const geometry = (page) =>
     return {
       state: rail.dataset.state,
       rail: { ...rr(rail), bottom: getComputedStyle(rail).bottom, ink: getComputedStyle(rail).color },
-      morph: { ...rr(document.querySelector(".rail-morph")), visibility: getComputedStyle(document.querySelector(".rail-morph")).visibility, href: document.querySelector(".rail-morph").getAttribute("href"), ariaHidden: document.querySelector(".rail-morph").getAttribute("aria-hidden") },
-      icon: rr(document.querySelector(".rail-icon svg")),
+      bell: { ...rr(document.querySelector(".rail-bell")), disabled: document.querySelector(".rail-bell").disabled, ariaHidden: document.querySelector(".rail-bell").getAttribute("aria-hidden"), faceOpacity: getComputedStyle(document.querySelector(".rail-bell-face")).opacity },
+      icon: rr(document.querySelector(".rail-bell svg")),
       badge: { ...rr(document.querySelector(".rail-badge")), bg: getComputedStyle(document.querySelector(".rail-badge")).backgroundColor, font: getComputedStyle(document.querySelector(".rail-badge")).fontSize, text: document.querySelector(".rail-badge").textContent },
-      tabs: tabs.map((t) => ({ label: t.querySelector("span").textContent, ...rr(t), selected: t.getAttribute("aria-selected"), controls: t.getAttribute("aria-controls"), icon: !!t.querySelector("svg") })),
-      tabsHostChildren: [...document.querySelector(".rail-tabs").children].map((c) => `${c.tagName.toLowerCase()}.${String(c.className).split(" ")[0] || "-"}${c.getAttribute("aria-hidden") ? "[aria-hidden]" : ""}`),
+      tabs: tabs.map((t) => ({ label: t.querySelector("span").textContent, ...rr(t), selected: t.getAttribute("aria-current"), controls: t.getAttribute("aria-controls"), icon: !!t.querySelector("svg") })),
+      tabsChildren: [...document.querySelector(".rail-tabs").children].map((c) => `${c.tagName.toLowerCase()}.${String(c.className).split(" ")[0] || "-"}`),
       navLabel: rail.getAttribute("aria-label"),
       tablistLabel: document.querySelector(".rail-tabs").getAttribute("aria-label"),
     };
@@ -94,15 +94,15 @@ await page.waitForTimeout(1500);
 await page.evaluate(() => window.scrollTo(0, 0));
 await page.waitForTimeout(700);
 out.lightCalm = await geometry(page);
-await itemStats(page, '.rail-tab[aria-selected="true"]', "lightSelectedTab", "tab-selected-light");
-await itemStats(page, '.rail-tab[aria-selected="false"]', "lightUnselectedTab", "tab-unselected-light");
+await itemStats(page, '.rail-tab[aria-current="page"]', "lightSelectedTab", "tab-selected-light");
+await itemStats(page, '.rail-tab:not([aria-current])', "lightUnselectedTab", "tab-unselected-light");
 await itemStats(page, ".rail-tabs", "lightPill", "pill-light");
 
 // ---- light section, alert ---------------------------------------------------
 await page.click(".morph-switch-track");
 await page.waitForTimeout(1100);
 out.lightAlert = await geometry(page);
-await itemStats(page, ".rail-morph", "lightBell", "bell-light");
+await itemStats(page, ".rail-bell", "lightBell", "bell-light");
 await itemStats(page, ".rail-badge", "lightBadge", "badge-light");
 
 // ---- platform font actually rendering the Persian label --------------------
@@ -110,24 +110,24 @@ const cdp = await page.context().newCDPSession(page);
 await cdp.send("DOM.enable");
 await cdp.send("CSS.enable");
 const { root } = await cdp.send("DOM.getDocument");
-const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: '.rail-tab[aria-selected="true"] > span' });
+const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: '.rail-tab[aria-current="page"] > span' });
 out.platformFontLabel = await cdp.send("CSS.getPlatformFontsForNode", { nodeId }).then((r) => r.fonts).catch(() => null);
 
 // ---- dark section (scroll to the end, html.end-dark) ------------------------
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 await page.waitForTimeout(1300);
 out.darkAlert = await geometry(page);
-await itemStats(page, '.rail-tab[aria-selected="true"]', "darkSelectedTab", "tab-selected-dark");
-await itemStats(page, '.rail-tab[aria-selected="false"]', "darkUnselectedTab", "tab-unselected-dark");
+await itemStats(page, '.rail-tab[aria-current="page"]', "darkSelectedTab", "tab-selected-dark");
+await itemStats(page, '.rail-tab:not([aria-current])', "darkUnselectedTab", "tab-unselected-dark");
 await itemStats(page, ".rail-badge", "darkBadge", "badge-dark");
-await itemStats(page, ".rail-icon", "darkBell", "bell-dark");
+await itemStats(page, ".rail-bell svg", "darkBell", "bell-dark");
 
 // ---- reduced motion ----------------------------------------------------------
 await page.emulateMedia({ reducedMotion: "reduce" });
 await page.waitForTimeout(300);
 out.reducedMotion = await page.evaluate(() => {
   const cs = (s) => getComputedStyle(document.querySelector(s));
-  return { tabs: cs(".rail-tabs").transitionDuration, morph: cs(".rail-morph").transitionDuration, icon: cs(".rail-icon").transitionDuration, anim: cs(".rail-morph").animationName };
+  return { tab: cs(".rail-tab").transitionDuration, badge: cs(".rail-badge").transitionDuration, anim: cs(".rail-bell-face").animationName };
 });
 await page.emulateMedia({ reducedMotion: null });
 

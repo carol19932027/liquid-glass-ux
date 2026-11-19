@@ -1,4 +1,5 @@
 import { createLiquidGlass, supportsRefraction } from "./glass/liquid-glass";
+import { createRailGlass } from "./rail-glass";
 
 const glass = document.querySelector<HTMLElement>(".glass")!;
 const title = document.querySelector<HTMLElement>("h1")!;
@@ -320,68 +321,63 @@ if (!supportsRefraction) {
 }
 
 // --- The morph rail ---------------------------------------------------------
-// Two glass hosts, one data-state, driven by the notification count the
-// switch simulates: alert (badge > 0) is the bell button plus the tab
-// pill; calm (zero mail) keeps the navigation in its own shape and melts
-// ONLY the bell away, into the tab pill's left cap. The switch is the
-// only writer. The bell's own href/focusability follow the state: a live
-// Notifications link in alert, unfocusable and aria-hidden in calm, where
-// there is no button left to tab to.
+// An iOS 27 tab bar on ONE metaball lens: src/rail-glass.ts owns the field
+// and the reference spring; this file owns the semantics. The notification
+// count the switch simulates is the only writer of data-state and of the
+// spring's target: alert (badge > 0) splits the bell droplet out of the
+// capsule's left cap; calm (zero mail) melts it back to radius 0 and
+// disables the bell button, so nothing of it stays in the tab order or the
+// accessibility tree. The tabs are navigation items (aria-current="page",
+// roving tabindex, RTL-aware arrows) — there are no panels on this page, so
+// the tablist pattern would promise content that does not exist.
 const NOTIFICATIONS = 3; // what the switch's "on" simulates as arrived
 const rail = document.querySelector<HTMLElement>(".rail")!;
 const railTabsHost = document.querySelector<HTMLElement>(".rail-tabs")!;
-const railMorph = document.querySelector<HTMLAnchorElement>(".rail-morph")!;
+const railBell = document.querySelector<HTMLButtonElement>(".rail-bell")!;
 const railSwitch = document.querySelector<HTMLInputElement>("#morph-switch")!;
-
-for (const host of document.querySelectorAll<HTMLElement>(".rail-host")) {
-  // reflect: false — the reflection layer overhangs its host by `pad` on
-  // every side; two overhanging backdrop roots filtering each other's
-  // pixels invalidate one another every frame and blink the glass out
-  // to near-transparent. Without it the hosts MAY overlap (they do, mid
-  // morph): the stack is one-way — bell z2 over pill z0 — so only the
-  // bell ever samples the other's glass, and that stacked sampling is
-  // exactly the fusion effect.
-  createLiquidGlass(host, { radius: 28, reflect: false });
-}
-
 const railBadge = document.querySelector<HTMLElement>(".rail-badge")!;
+
+const railGlass = createRailGlass(rail, supportsRefraction);
+// the frame rig poses the spring deterministically through this handle
+(window as unknown as Record<string, unknown>).railGlass = railGlass;
+
+// The capsule's width is content-driven — the Persian labels fall back to
+// the platform's font, so their metrics arrive late. Measure once fonts
+// settle and on resize; the lens re-reads its footprint from --pill-w.
+const measurePill = () => {
+  const w = Math.ceil(railTabsHost.offsetWidth);
+  if (w > 0) rail.style.setProperty("--pill-w", `${w}px`);
+  railGlass.resize();
+};
+measurePill();
+document.fonts?.ready.then(measurePill).catch(() => {});
+addEventListener("resize", measurePill);
 
 const setRailState = (alert: boolean) => {
   rail.dataset.state = alert ? "alert" : "calm";
   railBadge.textContent = String(NOTIFICATIONS);
-  if (alert) {
-    railMorph.href = "#top";
-    railMorph.removeAttribute("tabindex");
-    railMorph.removeAttribute("aria-hidden");
-    railMorph.setAttribute("aria-label", `Notifications, ${NOTIFICATIONS} unread`);
-  } else {
-    // no mail, no button: the bell is melted away, so it must not stay in
-    // the tab order or the accessibility tree
-    railMorph.removeAttribute("href");
-    railMorph.tabIndex = -1;
-    railMorph.setAttribute("aria-hidden", "true");
-    railMorph.setAttribute("aria-label", "Notifications");
-  }
+  railBell.disabled = !alert;
+  if (alert) railBell.removeAttribute("aria-hidden");
+  else railBell.setAttribute("aria-hidden", "true");
+  railBell.setAttribute("aria-label", alert ? `Notifications, ${NOTIFICATIONS} unread` : "Notifications");
+  railGlass.setTarget(alert ? 1 : 0);
 };
 
-// The tab bar: three tabs in an RTL island, the selected one wears the ink
-// pill. Selection moves with click and arrow keys (in RTL, ArrowLeft is
-// "forward"), roving tabindex per the tabs pattern; this demo has no tab
-// panels, so the state is purely the rail's own.
-const railTabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".rail-tab"));
-
-const selectTab = (tab: HTMLButtonElement) => {
-  for (const other of railTabs) {
-    const on = other === tab;
-    other.setAttribute("aria-selected", String(on));
-    other.tabIndex = on ? 0 : -1;
-  }
-};
-
-for (const [i, tab] of railTabs.entries()) {
+for (const [i, tab] of document.querySelectorAll<HTMLButtonElement>(".rail-tab").entries()) {
+  const railTabs = () => Array.from(document.querySelectorAll<HTMLButtonElement>(".rail-tab"));
+  const selectTab = (next: HTMLButtonElement) => {
+    for (const other of railTabs()) {
+      const on = other === next;
+      if (on) other.setAttribute("aria-current", "page");
+      else other.removeAttribute("aria-current");
+      other.tabIndex = on ? 0 : -1;
+    }
+  };
   tab.addEventListener("click", () => selectTab(tab));
   tab.addEventListener("keydown", (event) => {
-    const last = railTabs.length - 1;
+    const tabs = railTabs();
+    const last = tabs.length - 1;
+    // the host is an RTL island: ArrowLeft is "forward"
     const to =
       event.key === "ArrowLeft" ? Math.min(i + 1, last)
       : event.key === "ArrowRight" ? Math.max(i - 1, 0)
@@ -390,18 +386,10 @@ for (const [i, tab] of railTabs.entries()) {
       : -1;
     if (to < 0) return;
     event.preventDefault();
-    selectTab(railTabs[to]!);
-    railTabs[to]!.focus();
+    selectTab(tabs[to]!);
+    tabs[to]!.focus();
   });
 }
 
-railSwitch.addEventListener("change", () => {
-  // rail-armed enables the reference's anticipation nudge (a keyed
-  // animation on the morph host, translate out to 25px/20px at 28% of a
-  // .62s run and a pop-spring return). It is armed on the first switch
-  // flip only, so the rail never nudges on load, when the state is
-  // written once to match the switch's initial position.
-  rail.classList.add("rail-armed");
-  setRailState(railSwitch.checked);
-});
+railSwitch.addEventListener("change", () => setRailState(railSwitch.checked));
 setRailState(railSwitch.checked);
